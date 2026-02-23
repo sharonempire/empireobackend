@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
-from app.core.pagination import PaginatedResponse, paginate
+from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user, require_perm
 from app.modules.tasks.schemas import TaskCreate, TaskOut, TaskUpdate
@@ -26,7 +26,7 @@ async def api_list_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     tasks, total = await list_tasks(db, page, size, assigned_to, status, entity_type, entity_id)
-    return {**paginate(total, page, size), "items": tasks}
+    return {**paginate_metadata(total, page, size), "items": tasks}
 
 
 @router.get("/my", response_model=PaginatedResponse[TaskOut])
@@ -38,7 +38,7 @@ async def api_my_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     tasks, total = await list_tasks(db, page, size, assigned_to=current_user.id, status=status)
-    return {**paginate(total, page, size), "items": tasks}
+    return {**paginate_metadata(total, page, size), "items": tasks}
 
 
 @router.get("/{task_id}", response_model=TaskOut)

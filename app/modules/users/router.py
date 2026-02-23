@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
-from app.core.pagination import PaginatedResponse, paginate
+from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user, require_perm
 from app.modules.users.models import User
@@ -23,7 +23,7 @@ async def api_list_users(
     db: AsyncSession = Depends(get_db),
 ):
     users, total = await list_users(db, page, size, department)
-    return {**paginate(total, page, size), "items": users}
+    return {**paginate_metadata(total, page, size), "items": users}
 
 
 @router.get("/me", response_model=UserOut)

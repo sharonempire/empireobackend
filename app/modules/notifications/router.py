@@ -6,7 +6,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.core.pagination import PaginatedResponse, paginate
+from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.modules.notifications.models import Notification
@@ -34,7 +34,7 @@ async def api_list_notifications(
     total = (await db.execute(count_stmt)).scalar()
     stmt = stmt.offset((page - 1) * size).limit(size).order_by(Notification.created_at.desc())
     result = await db.execute(stmt)
-    return {**paginate(total, page, size), "items": result.scalars().all()}
+    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
 
 
 @router.post("/read-all")

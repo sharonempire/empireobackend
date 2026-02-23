@@ -3,7 +3,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.core.pagination import PaginatedResponse, paginate
+from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.modules.courses.models import Course
@@ -33,9 +33,9 @@ async def api_list_courses(
         count_stmt = count_stmt.where(Course.program_level == program_level)
 
     total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Course.name)
+    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Course.program_name)
     result = await db.execute(stmt)
-    return {**paginate(total, page, size), "items": result.scalars().all()}
+    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
 
 
 @router.get("/search", response_model=PaginatedResponse[CourseOut])
@@ -47,15 +47,15 @@ async def api_search_courses(
     db: AsyncSession = Depends(get_db),
 ):
     pattern = f"%{q}%"
-    condition = or_(Course.name.ilike(pattern), Course.university.ilike(pattern), Course.country.ilike(pattern))
+    condition = or_(Course.program_name.ilike(pattern), Course.university.ilike(pattern), Course.country.ilike(pattern))
 
     stmt = select(Course).where(condition)
     count_stmt = select(func.count()).select_from(Course).where(condition)
 
     total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Course.name)
+    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Course.program_name)
     result = await db.execute(stmt)
-    return {**paginate(total, page, size), "items": result.scalars().all()}
+    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
 
 
 @router.get("/{course_id}", response_model=CourseOut)

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
-from app.core.pagination import PaginatedResponse, paginate
+from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user, require_perm
 from app.modules.documents.schemas import DocumentCreate, DocumentOut
@@ -24,7 +24,7 @@ async def api_list_documents(
     db: AsyncSession = Depends(get_db),
 ):
     docs, total = await list_documents(db, page, size, entity_type, entity_id)
-    return {**paginate(total, page, size), "items": docs}
+    return {**paginate_metadata(total, page, size), "items": docs}
 
 
 @router.post("/", response_model=DocumentOut, status_code=201)

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.pagination import PaginatedResponse, paginate
+from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.modules.events.models import Event
@@ -40,4 +40,4 @@ async def api_list_events(
     total = (await db.execute(count_stmt)).scalar()
     stmt = stmt.offset((page - 1) * size).limit(size).order_by(Event.created_at.desc())
     result = await db.execute(stmt)
-    return {**paginate(total, page, size), "items": result.scalars().all()}
+    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
-from app.core.pagination import PaginatedResponse, paginate
+from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user, require_perm
 from app.modules.applications.schemas import ApplicationCreate, ApplicationOut, ApplicationUpdate
@@ -23,7 +23,7 @@ async def api_list_applications(
     db: AsyncSession = Depends(get_db),
 ):
     apps, total = await list_applications(db, page, size, case_id)
-    return {**paginate(total, page, size), "items": apps}
+    return {**paginate_metadata(total, page, size), "items": apps}
 
 
 @router.get("/{application_id}", response_model=ApplicationOut)

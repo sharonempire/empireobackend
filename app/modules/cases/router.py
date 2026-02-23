@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
-from app.core.pagination import PaginatedResponse, paginate
+from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user, require_perm
 from app.modules.cases.schemas import CaseCreate, CaseOut, CaseUpdate
@@ -25,7 +25,7 @@ async def api_list_cases(
     db: AsyncSession = Depends(get_db),
 ):
     cases, total = await list_cases(db, page, size, is_active, counselor_id, stage)
-    return {**paginate(total, page, size), "items": cases}
+    return {**paginate_metadata(total, page, size), "items": cases}
 
 
 @router.get("/{case_id}", response_model=CaseOut)

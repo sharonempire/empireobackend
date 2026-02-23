@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
-from app.core.pagination import PaginatedResponse, paginate
+from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user, require_perm
 from app.modules.approvals.schemas import ActionDraftOut, ReviewRequest
@@ -23,7 +23,7 @@ async def api_list_drafts(
     db: AsyncSession = Depends(get_db),
 ):
     drafts, total = await list_drafts(db, page, size, status)
-    return {**paginate(total, page, size), "items": drafts}
+    return {**paginate_metadata(total, page, size), "items": drafts}
 
 
 @router.get("/{draft_id}", response_model=ActionDraftOut)
