@@ -1,29 +1,51 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
+
+from app.core.events import log_event
+from app.core.pagination import PaginatedResponse, paginate
 from app.database import get_db
-from app.dependencies import get_current_user
-from app.modules.approvals.service import ApprovalService
-from app.modules.approvals.schemas import ActionDraftOut, ActionDraftCreate, ApprovalDecision
+from app.dependencies import get_current_user, require_perm
+from app.modules.approvals.schemas import ActionDraftOut, ReviewRequest
+from app.modules.approvals.service import get_draft, list_drafts, review_draft
 from app.modules.users.models import User
-from app.core.pagination import PaginatedResponse
 
-router = APIRouter()
-
-
-@router.get("/pending", response_model=PaginatedResponse[ActionDraftOut])
-async def list_pending(page: int = Query(1), size: int = Query(20),
-                       db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    svc = ApprovalService(db)
-    items, total = await svc.list_pending(page, size)
-    return PaginatedResponse(items=items, total=total, page=page, size=size, pages=(total + size - 1) // size)
+router = APIRouter(prefix="/approvals", tags=["Approvals"])
 
 
-@router.post("", response_model=ActionDraftOut, status_code=201)
-async def create_draft(data: ActionDraftCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    return await ApprovalService(db).create_draft(data, "user", user.id)
+@router.get("/", response_model=PaginatedResponse[ActionDraftOut])
+async def api_list_drafts(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    status: str | None = "pending_approval",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    drafts, total = await list_drafts(db, page, size, status)
+    return {**paginate(total, page, size), "items": drafts}
 
 
-@router.post("/{draft_id}/decide", response_model=ActionDraftOut)
-async def decide(draft_id: UUID, data: ApprovalDecision, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    return await ApprovalService(db).decide(draft_id, data, approver_id=user.id)
+@router.get("/{draft_id}", response_model=ActionDraftOut)
+async def api_get_draft(
+    draft_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_draft(db, draft_id)
+
+
+@router.post("/{draft_id}/review", response_model=ActionDraftOut)
+async def api_review_draft(
+    draft_id: UUID,
+    data: ReviewRequest,
+    current_user: User = Depends(require_perm("approvals", "review")),
+    db: AsyncSession = Depends(get_db),
+):
+    draft = await review_draft(db, draft_id, data.action, current_user.id, data.rejection_reason)
+    await log_event(
+        db, f"approval.{data.action}d", current_user.id, "action_draft", draft.id,
+        {"action_type": draft.action_type},
+    )
+    await db.commit()
+    return draft

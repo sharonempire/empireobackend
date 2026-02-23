@@ -1,28 +1,67 @@
-from pydantic import BaseModel
+from datetime import date, datetime
 from uuid import UUID
-from datetime import datetime, date
-from typing import Optional
+
+from pydantic import BaseModel
 
 
 class StudentOut(BaseModel):
     id: UUID
-    lead_id: UUID
+    lead_id: int | None = None
     full_name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    education_level: Optional[str] = None
-    preferred_countries: Optional[list] = None
-    assigned_counselor_id: Optional[UUID] = None
+    email: str | None = None
+    phone: str | None = None
+    date_of_birth: date | None = None
+    nationality: str | None = None
+    passport_number: str | None = None
+    passport_expiry: date | None = None
+    education_level: str | None = None
+    education_details: dict | list | None = None
+    english_test_type: str | None = None
+    english_test_score: str | None = None
+    work_experience_years: int = 0
+    preferred_countries: list | None = None
+    preferred_programs: list | None = None
+    assigned_counselor_id: UUID | None = None
+    assigned_processor_id: UUID | None = None
     created_at: datetime
+    updated_at: datetime
+
     model_config = {"from_attributes": True}
 
 
 class StudentCreate(BaseModel):
-    lead_id: UUID
     full_name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    date_of_birth: Optional[date] = None
-    nationality: Optional[str] = None
-    education_level: Optional[str] = None
-    preferred_countries: Optional[list] = None
+    email: str | None = None
+    phone: str | None = None
+    date_of_birth: date | None = None
+    nationality: str | None = None
+    passport_number: str | None = None
+    passport_expiry: date | None = None
+    education_level: str | None = None
+    education_details: dict | list | None = None
+    english_test_type: str | None = None
+    english_test_score: str | None = None
+    work_experience_years: int = 0
+    preferred_countries: list | None = None
+    preferred_programs: list | None = None
+    assigned_counselor_id: UUID | None = None
+    assigned_processor_id: UUID | None = None
+
+
+class StudentUpdate(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    date_of_birth: date | None = None
+    nationality: str | None = None
+    passport_number: str | None = None
+    passport_expiry: date | None = None
+    education_level: str | None = None
+    education_details: dict | list | None = None
+    english_test_type: str | None = None
+    english_test_score: str | None = None
+    work_experience_years: int | None = None
+    preferred_countries: list | None = None
+    preferred_programs: list | None = None
+    assigned_counselor_id: UUID | None = None
+    assigned_processor_id: UUID | None = None

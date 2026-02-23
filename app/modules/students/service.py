@@ -1,43 +1,57 @@
 from uuid import UUID
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+
+from app.core.exceptions import NotFoundError
 from app.modules.students.models import Student
-from app.modules.students.schemas import StudentCreate
-from app.modules.leads.models import Lead
-from app.modules.events.service import EventService
-from app.core.exceptions import NotFoundError, BadRequestError
+from app.modules.students.schemas import StudentCreate, StudentUpdate
 
 
-class StudentService:
-    def __init__(self, db: AsyncSession):
-        self.db = db
-        self.events = EventService(db)
+async def list_students(
+    db: AsyncSession,
+    page: int = 1,
+    size: int = 20,
+    counselor_id: UUID | None = None,
+    search: str | None = None,
+) -> tuple[list[Student], int]:
+    stmt = select(Student)
+    count_stmt = select(func.count()).select_from(Student)
 
-    async def get_by_id(self, student_id: UUID) -> Student:
-        result = await self.db.execute(select(Student).where(Student.id == student_id))
-        student = result.scalar_one_or_none()
-        if not student:
-            raise NotFoundError("Student", str(student_id))
-        return student
+    if counselor_id:
+        stmt = stmt.where(Student.assigned_counselor_id == counselor_id)
+        count_stmt = count_stmt.where(Student.assigned_counselor_id == counselor_id)
 
-    async def list_students(self, page=1, size=20):
-        q = select(Student)
-        total = (await self.db.execute(select(func.count()).select_from(q.subquery()))).scalar()
-        q = q.offset((page - 1) * size).limit(size).order_by(Student.created_at.desc())
-        result = await self.db.execute(q)
-        return result.scalars().all(), total
+    if search:
+        pattern = f"%{search}%"
+        condition = or_(Student.full_name.ilike(pattern), Student.email.ilike(pattern), Student.phone.ilike(pattern))
+        stmt = stmt.where(condition)
+        count_stmt = count_stmt.where(condition)
 
-    async def convert_lead(self, data: StudentCreate, actor_id: UUID) -> Student:
-        lead = (await self.db.execute(select(Lead).where(Lead.id == data.lead_id))).scalar_one_or_none()
-        if not lead:
-            raise NotFoundError("Lead", str(data.lead_id))
-        if lead.converted_to_student_id:
-            raise BadRequestError("Lead already converted")
-        student = Student(**data.model_dump(exclude_unset=True), assigned_counselor_id=lead.assigned_to)
-        self.db.add(student)
-        await self.db.flush()
-        lead.converted_to_student_id = student.id
-        lead.status = "converted"
-        await self.db.flush()
-        await self.events.log("lead_converted", "user", actor_id, "lead", lead.id, {"student_id": str(student.id)})
-        return student
+    total = (await db.execute(count_stmt)).scalar()
+    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Student.created_at.desc())
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
+
+
+async def get_student(db: AsyncSession, student_id: UUID) -> Student:
+    result = await db.execute(select(Student).where(Student.id == student_id))
+    student = result.scalar_one_or_none()
+    if not student:
+        raise NotFoundError("Student not found")
+    return student
+
+
+async def create_student(db: AsyncSession, data: StudentCreate) -> Student:
+    student = Student(**data.model_dump())
+    db.add(student)
+    await db.flush()
+    return student
+
+
+async def update_student(db: AsyncSession, student_id: UUID, data: StudentUpdate) -> Student:
+    student = await get_student(db, student_id)
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(student, key, value)
+    await db.flush()
+    return student

@@ -1,57 +1,56 @@
-from uuid import UUID
 from datetime import datetime, timezone
+from uuid import UUID
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.modules.approvals.models import ActionDraft
-from app.modules.approvals.schemas import ActionDraftCreate, ApprovalDecision
-from app.modules.events.service import EventService
-from app.core.exceptions import NotFoundError, BadRequestError
 
 
-class ApprovalService:
-    def __init__(self, db: AsyncSession):
-        self.db = db
-        self.events = EventService(db)
+async def list_drafts(
+    db: AsyncSession,
+    page: int = 1,
+    size: int = 20,
+    status: str | None = "pending_approval",
+) -> tuple[list[ActionDraft], int]:
+    stmt = select(ActionDraft)
+    count_stmt = select(func.count()).select_from(ActionDraft)
 
-    async def create_draft(self, data: ActionDraftCreate, creator_type: str, creator_id: UUID | None) -> ActionDraft:
-        draft = ActionDraft(**data.model_dump(), created_by_type=creator_type, created_by_id=creator_id)
-        if not data.requires_approval:
-            draft.status = "approved"
-            draft.approved_at = datetime.now(timezone.utc)
-        self.db.add(draft)
-        await self.db.flush()
-        await self.events.log(
-            "approval_requested" if data.requires_approval else "action_auto_approved",
-            creator_type, creator_id, data.entity_type, data.entity_id,
-            {"draft_id": str(draft.id), "action": data.action_type},
-        )
-        return draft
+    if status:
+        stmt = stmt.where(ActionDraft.status == status)
+        count_stmt = count_stmt.where(ActionDraft.status == status)
 
-    async def list_pending(self, page=1, size=20):
-        q = select(ActionDraft).where(ActionDraft.status == "pending_approval")
-        total = (await self.db.execute(select(func.count()).select_from(q.subquery()))).scalar()
-        q = q.offset((page - 1) * size).limit(size).order_by(ActionDraft.created_at.desc())
-        result = await self.db.execute(q)
-        return result.scalars().all(), total
+    total = (await db.execute(count_stmt)).scalar()
+    stmt = stmt.offset((page - 1) * size).limit(size).order_by(ActionDraft.created_at.desc())
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
 
-    async def decide(self, draft_id: UUID, decision: ApprovalDecision, approver_id: UUID) -> ActionDraft:
-        result = await self.db.execute(select(ActionDraft).where(ActionDraft.id == draft_id))
-        draft = result.scalar_one_or_none()
-        if not draft:
-            raise NotFoundError("ActionDraft", str(draft_id))
-        if draft.status != "pending_approval":
-            raise BadRequestError(f"Draft is already {draft.status}")
-        now = datetime.now(timezone.utc)
-        if decision.approved:
-            draft.status = "approved"
-            draft.approved_by = approver_id
-            draft.approved_at = now
-            await self.events.log("approval_granted", "user", approver_id, draft.entity_type, draft.entity_id,
-                                  {"draft_id": str(draft.id)})
-        else:
-            draft.status = "rejected"
-            draft.rejection_reason = decision.reason
-            await self.events.log("approval_rejected", "user", approver_id, draft.entity_type, draft.entity_id,
-                                  {"draft_id": str(draft.id), "reason": decision.reason})
-        await self.db.flush()
-        return draft
+
+async def get_draft(db: AsyncSession, draft_id: UUID) -> ActionDraft:
+    result = await db.execute(select(ActionDraft).where(ActionDraft.id == draft_id))
+    draft = result.scalar_one_or_none()
+    if not draft:
+        raise NotFoundError("Action draft not found")
+    return draft
+
+
+async def review_draft(db: AsyncSession, draft_id: UUID, action: str, reviewer_id: UUID, rejection_reason: str | None = None) -> ActionDraft:
+    draft = await get_draft(db, draft_id)
+    if draft.status != "pending_approval":
+        raise BadRequestError("Draft is not pending approval")
+
+    if action == "approve":
+        draft.status = "approved"
+        draft.approved_by = reviewer_id
+        draft.approved_at = datetime.now(timezone.utc)
+    elif action == "reject":
+        draft.status = "rejected"
+        draft.approved_by = reviewer_id
+        draft.approved_at = datetime.now(timezone.utc)
+        draft.rejection_reason = rejection_reason
+    else:
+        raise BadRequestError("Action must be 'approve' or 'reject'")
+
+    await db.flush()
+    return draft

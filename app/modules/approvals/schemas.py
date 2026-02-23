@@ -1,7 +1,7 @@
-from pydantic import BaseModel
-from uuid import UUID
 from datetime import datetime
-from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel
 
 
 class ActionDraftOut(BaseModel):
@@ -9,24 +9,23 @@ class ActionDraftOut(BaseModel):
     action_type: str
     entity_type: str
     entity_id: UUID
-    payload: dict
+    payload: dict | None = None
     created_by_type: str
+    created_by_id: UUID | None = None
     status: str
     requires_approval: bool
-    approved_by: Optional[UUID] = None
-    approved_at: Optional[datetime] = None
+    approved_by: UUID | None = None
+    approved_at: datetime | None = None
+    rejection_reason: str | None = None
+    executed_at: datetime | None = None
+    execution_result: dict | None = None
+    expires_at: datetime | None = None
     created_at: datetime
+    updated_at: datetime
+
     model_config = {"from_attributes": True}
 
 
-class ActionDraftCreate(BaseModel):
-    action_type: str
-    entity_type: str
-    entity_id: UUID
-    payload: dict
-    requires_approval: bool = True
-
-
-class ApprovalDecision(BaseModel):
-    approved: bool
-    reason: Optional[str] = None
+class ReviewRequest(BaseModel):
+    action: str  # "approve" or "reject"
+    rejection_reason: str | None = None

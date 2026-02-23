@@ -1,50 +1,65 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
+
+from app.core.events import log_event
+from app.core.pagination import PaginatedResponse, paginate
 from app.database import get_db
-from app.dependencies import get_current_user
-from app.modules.users.service import UserService
-from app.modules.users.schemas import UserOut, UserCreate, UserUpdate, AssignRoleRequest
-from app.core.pagination import PaginatedResponse
+from app.dependencies import get_current_user, require_perm
+from app.modules.users.models import User
+from app.modules.users.schemas import UserCreate, UserOut, UserUpdate
+from app.modules.users.service import create_user, get_user, list_users, update_user
 
-router = APIRouter()
+router = APIRouter(prefix="/users", tags=["Users"])
 
 
-@router.get("", response_model=PaginatedResponse[UserOut])
-async def list_users(
+@router.get("/", response_model=PaginatedResponse[UserOut])
+async def api_list_users(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     department: str | None = None,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
 ):
-    svc = UserService(db)
-    users, total = await svc.list_users(page, size, department)
-    return PaginatedResponse(
-        items=users, total=total, page=page, size=size, pages=(total + size - 1) // size
-    )
+    users, total = await list_users(db, page, size, department)
+    return {**paginate(total, page, size), "items": users}
 
 
 @router.get("/me", response_model=UserOut)
-async def get_me(current_user=Depends(get_current_user)):
+async def api_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
 @router.get("/{user_id}", response_model=UserOut)
-async def get_user(user_id: UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    return await UserService(db).get_by_id(user_id)
+async def api_get_user(
+    user_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_user(db, user_id)
 
 
-@router.post("", response_model=UserOut, status_code=201)
-async def create_user(data: UserCreate, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    return await UserService(db).create_user(data)
+@router.post("/", response_model=UserOut, status_code=201)
+async def api_create_user(
+    data: UserCreate,
+    current_user: User = Depends(require_perm("users", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await create_user(db, data)
+    await log_event(db, "user.created", current_user.id, "user", user.id, {"email": user.email})
+    await db.commit()
+    return user
 
 
 @router.patch("/{user_id}", response_model=UserOut)
-async def update_user(user_id: UUID, data: UserUpdate, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    return await UserService(db).update_user(user_id, data)
-
-
-@router.put("/{user_id}/roles", response_model=UserOut)
-async def assign_roles(user_id: UUID, data: AssignRoleRequest, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    return await UserService(db).assign_roles(user_id, data.role_names)
+async def api_update_user(
+    user_id: UUID,
+    data: UserUpdate,
+    current_user: User = Depends(require_perm("users", "update")),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await update_user(db, user_id, data)
+    await log_event(db, "user.updated", current_user.id, "user", user.id, data.model_dump(exclude_unset=True))
+    await db.commit()
+    return user

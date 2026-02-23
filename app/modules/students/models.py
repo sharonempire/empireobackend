@@ -1,31 +1,37 @@
 import uuid
-from datetime import datetime, timezone, date
-from sqlalchemy import String, Integer, Text, DateTime, Date, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from datetime import datetime
+
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
+
 from app.database import Base
 
 
 class Student(Base):
-    __tablename__ = "students"
+    __tablename__ = "eb_students"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    lead_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("leads.id"), unique=True)
-    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
-    nationality: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    passport_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    passport_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)
-    education_level: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    education_details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    english_test_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    english_test_score: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    work_experience_years: Mapped[int] = mapped_column(Integer, default=0)
-    preferred_countries: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    preferred_programs: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    assigned_counselor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    assigned_processor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lead_id = Column(BigInteger, unique=True, nullable=True)
+    full_name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True)
+    phone = Column(String(20), nullable=True)
+    date_of_birth = Column(Date, nullable=True)
+    nationality = Column(String(100), nullable=True)
+    passport_number = Column(String(50), nullable=True)
+    passport_expiry = Column(Date, nullable=True)
+    education_level = Column(String(50), nullable=True)
+    education_details = Column(JSONB, nullable=True)
+    english_test_type = Column(String(20), nullable=True)
+    english_test_score = Column(String(20), nullable=True)
+    work_experience_years = Column(Integer, default=0)
+    preferred_countries = Column(JSONB, nullable=True)
+    preferred_programs = Column(JSONB, nullable=True)
+    assigned_counselor_id = Column(UUID(as_uuid=True), ForeignKey("eb_users.id"), nullable=True)
+    assigned_processor_id = Column(UUID(as_uuid=True), ForeignKey("eb_users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    cases = relationship("Case", back_populates="student", lazy="selectin")
+    counselor = relationship("User", foreign_keys=[assigned_counselor_id], lazy="selectin")
+    processor = relationship("User", foreign_keys=[assigned_processor_id], lazy="selectin")

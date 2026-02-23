@@ -1,78 +1,74 @@
 import uuid
-import enum
-from datetime import datetime, timezone
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Table, Column, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
+from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
+
 from app.database import Base
 
 
-class Department(str, enum.Enum):
-    MARKETING = "marketing"
-    COUNSELING = "counseling"
-    PROCESSING = "processing"
-    VISA = "visa"
-    TRAVEL = "travel"
-    MANAGEMENT = "management"
-    FINANCE = "finance"
-    IT = "it"
-
-
-user_roles = Table(
-    "user_roles",
-    Base.metadata,
-    Column("user_id", UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
-    Column("role_id", UUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-)
-
-role_permissions = Table(
-    "role_permissions",
-    Base.metadata,
-    Column("role_id", UUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    Column("permission_id", UUID(as_uuid=True), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
-)
-
-
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "eb_users"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    department: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    profile_picture: Mapped[str | None] = mapped_column(Text, nullable=True)
-    caller_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    countries: Mapped[list | None] = mapped_column(ARRAY(String), nullable=True)
-    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    legacy_supabase_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), unique=True, nullable=False)
+    phone = Column(String(20), nullable=True)
+    full_name = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    department = Column(String(100), nullable=True)
+    is_active = Column(Boolean, default=True)
+    profile_picture = Column(Text, nullable=True)
+    caller_id = Column(String(50), nullable=True)
+    location = Column(String(100), nullable=True)
+    countries = Column(JSONB, nullable=True)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+    legacy_supabase_id = Column(UUID(as_uuid=True), unique=True, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    roles: Mapped[list["Role"]] = relationship(secondary=user_roles, back_populates="users", lazy="selectin")
+    user_roles = relationship("UserRole", back_populates="user", lazy="selectin")
+
+    @property
+    def roles(self) -> list[str]:
+        return [ur.role.name for ur in self.user_roles if ur.role]
 
 
 class Role(Base):
-    __tablename__ = "roles"
+    __tablename__ = "eb_roles"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(50), unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
-    users: Mapped[list["User"]] = relationship(secondary=user_roles, back_populates="roles", lazy="selectin")
-    permissions: Mapped[list["Permission"]] = relationship(secondary=role_permissions, back_populates="roles", lazy="selectin")
+    role_permissions = relationship("RolePermission", back_populates="role", lazy="selectin")
 
 
 class Permission(Base):
-    __tablename__ = "permissions"
+    __tablename__ = "eb_permissions"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    resource: Mapped[str] = mapped_column(String(50), nullable=False)
-    action: Mapped[str] = mapped_column(String(50), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    resource = Column(String(50), nullable=False)
+    action = Column(String(50), nullable=False)
+    description = Column(Text, nullable=True)
 
-    roles: Mapped[list["Role"]] = relationship(secondary=role_permissions, back_populates="permissions", lazy="selectin")
+
+class UserRole(Base):
+    __tablename__ = "eb_user_roles"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("eb_users.id"), primary_key=True)
+    role_id = Column(UUID(as_uuid=True), ForeignKey("eb_roles.id"), primary_key=True)
+
+    user = relationship("User", back_populates="user_roles")
+    role = relationship("Role")
+
+
+class RolePermission(Base):
+    __tablename__ = "eb_role_permissions"
+
+    role_id = Column(UUID(as_uuid=True), ForeignKey("eb_roles.id"), primary_key=True)
+    permission_id = Column(UUID(as_uuid=True), ForeignKey("eb_permissions.id"), primary_key=True)
+
+    role = relationship("Role", back_populates="role_permissions")
+    permission = relationship("Permission")

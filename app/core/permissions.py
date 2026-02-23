@@ -1,22 +1,22 @@
-from fastapi import HTTPException, status
-from app.modules.users.models import User
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.users.models import Permission, RolePermission, UserRole
 
 
-def require_permissions(*required: str):
-    """Check if user has required permissions. Usage: Depends(require_permissions("leads:read"))"""
-    def dependency(current_user: User):
-        user_perms = set()
-        for role in current_user.roles:
-            for perm in role.permissions:
-                user_perms.add(f"{perm.resource}:{perm.action}")
-        role_names = {r.name for r in current_user.roles}
-        if "super_admin" in role_names:
-            return current_user
-        for req in required:
-            if req not in user_perms:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Missing permission: {req}",
-                )
-        return current_user
-    return dependency
+async def has_permission(db: AsyncSession, user_id: UUID, resource: str, action: str) -> bool:
+    stmt = (
+        select(Permission.id)
+        .join(RolePermission, RolePermission.permission_id == Permission.id)
+        .join(UserRole, UserRole.role_id == RolePermission.role_id)
+        .where(
+            UserRole.user_id == user_id,
+            Permission.resource == resource,
+            Permission.action == action,
+        )
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none() is not None

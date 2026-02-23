@@ -1,36 +1,19 @@
-version: '3.8'
+version: "3.9"
 
 services:
   api:
     build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./app:/app/app
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
     env_file:
       - .env
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  db:
-    image: pgvector/pgvector:pg17
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: empireo
-      POSTGRES_PASSWORD: empireo_dev_2024
-      POSTGRES_DB: empireo_brain
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U empireo -d empireo_brain"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -38,20 +21,19 @@ services:
       - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   worker:
     build: .
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    volumes:
+      - ./app:/app/app
     env_file:
       - .env
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A app.workers.celery_app worker --loglevel=info
-
-volumes:
-  pgdata:
+    restart: unless-stopped

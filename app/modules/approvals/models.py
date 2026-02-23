@@ -1,43 +1,49 @@
 import uuid
-from datetime import datetime, timezone
-from sqlalchemy import String, Boolean, Integer, Text, DateTime, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
+
 from app.database import Base
 
 
 class ActionDraft(Base):
-    __tablename__ = "action_drafts"
+    __tablename__ = "eb_action_drafts"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    action_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    entity_type: Mapped[str] = mapped_column(String(30))
-    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    created_by_type: Mapped[str] = mapped_column(String(20), default="user")
-    created_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
-    status: Mapped[str] = mapped_column(String(30), default="pending_approval")
-    requires_approval: Mapped[bool] = mapped_column(Boolean, default=True)
-    approved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    execution_result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    action_type = Column(String(50), nullable=False)
+    entity_type = Column(String(30), nullable=False)
+    entity_id = Column(UUID(as_uuid=True), nullable=False)
+    payload = Column(JSONB, nullable=True)
+    created_by_type = Column(String(10), default="user")
+    created_by_id = Column(UUID(as_uuid=True), nullable=True)
+    status = Column(String(30), default="pending_approval")
+    requires_approval = Column(Boolean, default=True)
+    approved_by = Column(UUID(as_uuid=True), ForeignKey("eb_users.id"), nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    executed_at = Column(DateTime(timezone=True), nullable=True)
+    execution_result = Column(JSONB, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    approver = relationship("User", foreign_keys=[approved_by], lazy="selectin")
 
 
 class ActionRun(Base):
-    __tablename__ = "action_runs"
+    __tablename__ = "eb_action_runs"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    action_draft_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("action_drafts.id"))
-    action_type: Mapped[str] = mapped_column(String(50))
-    status: Mapped[str] = mapped_column(String(20), default="started")
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    retry_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    action_draft_id = Column(UUID(as_uuid=True), ForeignKey("eb_action_drafts.id"), nullable=False)
+    action_type = Column(String(50), nullable=False)
+    status = Column(String(20), default="started")
+    started_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    result = Column(JSONB, nullable=True)
+    error = Column(Text, nullable=True)
+    retry_count = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    draft = relationship("ActionDraft", lazy="selectin")

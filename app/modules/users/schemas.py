@@ -1,53 +1,47 @@
-from pydantic import BaseModel, EmailStr
-from uuid import UUID
 from datetime import datetime
-from typing import Optional, List
+from uuid import UUID
 
-
-class PermissionOut(BaseModel):
-    id: UUID
-    resource: str
-    action: str
-    model_config = {"from_attributes": True}
-
-
-class RoleOut(BaseModel):
-    id: UUID
-    name: str
-    description: Optional[str] = None
-    permissions: List[PermissionOut] = []
-    model_config = {"from_attributes": True}
+from pydantic import BaseModel, EmailStr
 
 
 class UserOut(BaseModel):
     id: UUID
     email: str
-    phone: Optional[str] = None
+    phone: str | None = None
     full_name: str
-    department: Optional[str] = None
+    department: str | None = None
     is_active: bool
-    location: Optional[str] = None
-    roles: List[RoleOut] = []
+    profile_picture: str | None = None
+    caller_id: str | None = None
+    location: str | None = None
+    countries: list | dict | None = None
+    last_login_at: datetime | None = None
     created_at: datetime
+    updated_at: datetime
+    roles: list[str] = []
+
     model_config = {"from_attributes": True}
 
 
 class UserCreate(BaseModel):
     email: EmailStr
-    phone: Optional[str] = None
     full_name: str
     password: str
-    department: Optional[str] = None
-    role_names: List[str] = ["counselor"]
+    phone: str | None = None
+    department: str | None = None
+    caller_id: str | None = None
+    location: str | None = None
+    countries: list | dict | None = None
+    role_ids: list[UUID] = []
 
 
 class UserUpdate(BaseModel):
-    phone: Optional[str] = None
-    full_name: Optional[str] = None
-    department: Optional[str] = None
-    is_active: Optional[bool] = None
-    location: Optional[str] = None
-
-
-class AssignRoleRequest(BaseModel):
-    role_names: List[str]
+    full_name: str | None = None
+    phone: str | None = None
+    department: str | None = None
+    is_active: bool | None = None
+    profile_picture: str | None = None
+    caller_id: str | None = None
+    location: str | None = None
+    countries: list | dict | None = None
+    role_ids: list[UUID] | None = None
