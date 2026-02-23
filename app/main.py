@@ -43,6 +43,17 @@ from app.modules.notifications.router import router as notifications_router
 from app.modules.workflows.router import router as workflows_router
 from app.modules.leads.router import router as leads_router
 from app.modules.courses.router import router as courses_router
+from app.modules.profiles.router import router as profiles_router
+from app.modules.intakes.router import router as intakes_router
+from app.modules.jobs.router import router as jobs_router
+from app.modules.call_events.router import router as call_events_router
+from app.modules.chat.router import router as chat_router
+from app.modules.payments.router import router as payments_router
+from app.modules.attendance.router import router as attendance_router
+from app.modules.ig_sessions.router import router as ig_sessions_router
+from app.modules.geography.router import router as geography_router
+from app.modules.ai_artifacts.router import router as ai_artifacts_router
+from app.modules.policies.router import router as policies_router
 
 API_PREFIX = "/api/v1"
 
@@ -59,6 +70,17 @@ app.include_router(notifications_router, prefix=API_PREFIX)
 app.include_router(workflows_router, prefix=API_PREFIX)
 app.include_router(leads_router, prefix=API_PREFIX)
 app.include_router(courses_router, prefix=API_PREFIX)
+app.include_router(profiles_router, prefix=API_PREFIX)
+app.include_router(intakes_router, prefix=API_PREFIX)
+app.include_router(jobs_router, prefix=API_PREFIX)
+app.include_router(call_events_router, prefix=API_PREFIX)
+app.include_router(chat_router, prefix=API_PREFIX)
+app.include_router(payments_router, prefix=API_PREFIX)
+app.include_router(attendance_router, prefix=API_PREFIX)
+app.include_router(ig_sessions_router, prefix=API_PREFIX)
+app.include_router(geography_router, prefix=API_PREFIX)
+app.include_router(ai_artifacts_router, prefix=API_PREFIX)
+app.include_router(policies_router, prefix=API_PREFIX)
 
 
 @app.get("/health")
