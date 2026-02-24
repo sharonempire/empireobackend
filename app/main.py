@@ -1,15 +1,21 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.config import settings
 from app.database import engine
+from app.core.logging_config import setup_logging
+from app.core.middleware import RequestIdMiddleware
+from app.core.exceptions import http_exception_handler, unhandled_exception_handler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Configure structured logging
+    setup_logging(settings.LOG_LEVEL)
     # Startup: verify DB connection
     async with engine.begin() as conn:
         await conn.execute(text("SELECT 1"))
@@ -28,6 +34,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request tracing
+app.add_middleware(RequestIdMiddleware)
+
+# Global error handlers
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Mount all routers
 from app.modules.auth.router import router as auth_router
@@ -54,35 +67,67 @@ from app.modules.ig_sessions.router import router as ig_sessions_router
 from app.modules.geography.router import router as geography_router
 from app.modules.ai_artifacts.router import router as ai_artifacts_router
 from app.modules.policies.router import router as policies_router
+from app.core.rbac import include_router_with_default
 
 API_PREFIX = "/api/v1"
 
+# Auth router is special (login/refresh) — do not add global read requirement
 app.include_router(auth_router, prefix=API_PREFIX)
-app.include_router(users_router, prefix=API_PREFIX)
-app.include_router(students_router, prefix=API_PREFIX)
-app.include_router(cases_router, prefix=API_PREFIX)
-app.include_router(applications_router, prefix=API_PREFIX)
-app.include_router(documents_router, prefix=API_PREFIX)
-app.include_router(tasks_router, prefix=API_PREFIX)
-app.include_router(events_router, prefix=API_PREFIX)
-app.include_router(approvals_router, prefix=API_PREFIX)
-app.include_router(notifications_router, prefix=API_PREFIX)
-app.include_router(workflows_router, prefix=API_PREFIX)
-app.include_router(leads_router, prefix=API_PREFIX)
-app.include_router(courses_router, prefix=API_PREFIX)
-app.include_router(profiles_router, prefix=API_PREFIX)
-app.include_router(intakes_router, prefix=API_PREFIX)
-app.include_router(jobs_router, prefix=API_PREFIX)
-app.include_router(call_events_router, prefix=API_PREFIX)
-app.include_router(chat_router, prefix=API_PREFIX)
-app.include_router(payments_router, prefix=API_PREFIX)
-app.include_router(attendance_router, prefix=API_PREFIX)
-app.include_router(ig_sessions_router, prefix=API_PREFIX)
-app.include_router(geography_router, prefix=API_PREFIX)
-app.include_router(ai_artifacts_router, prefix=API_PREFIX)
-app.include_router(policies_router, prefix=API_PREFIX)
+
+# Include routers with a default 'read' permission enforced at router level.
+include_router_with_default(app, users_router, prefix=API_PREFIX, resource="users")
+include_router_with_default(app, students_router, prefix=API_PREFIX, resource="students")
+include_router_with_default(app, cases_router, prefix=API_PREFIX, resource="cases")
+include_router_with_default(app, applications_router, prefix=API_PREFIX, resource="applications")
+include_router_with_default(app, documents_router, prefix=API_PREFIX, resource="documents")
+include_router_with_default(app, tasks_router, prefix=API_PREFIX, resource="tasks")
+include_router_with_default(app, events_router, prefix=API_PREFIX, resource="events")
+include_router_with_default(app, approvals_router, prefix=API_PREFIX, resource="approvals")
+include_router_with_default(app, notifications_router, prefix=API_PREFIX, resource="notifications")
+include_router_with_default(app, workflows_router, prefix=API_PREFIX, resource="workflows")
+include_router_with_default(app, leads_router, prefix=API_PREFIX, resource="leads")
+include_router_with_default(app, courses_router, prefix=API_PREFIX, resource="courses")
+include_router_with_default(app, profiles_router, prefix=API_PREFIX, resource="profiles")
+include_router_with_default(app, intakes_router, prefix=API_PREFIX, resource="intakes")
+include_router_with_default(app, jobs_router, prefix=API_PREFIX, resource="jobs")
+include_router_with_default(app, call_events_router, prefix=API_PREFIX, resource="call_events")
+include_router_with_default(app, chat_router, prefix=API_PREFIX, resource="chat")
+include_router_with_default(app, payments_router, prefix=API_PREFIX, resource="payments")
+include_router_with_default(app, attendance_router, prefix=API_PREFIX, resource="attendance")
+include_router_with_default(app, ig_sessions_router, prefix=API_PREFIX, resource="ig_sessions")
+include_router_with_default(app, geography_router, prefix=API_PREFIX, resource="geography")
+include_router_with_default(app, ai_artifacts_router, prefix=API_PREFIX, resource="ai_artifacts")
+include_router_with_default(app, policies_router, prefix=API_PREFIX, resource="policies")
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "app": settings.APP_NAME}
+    """Liveness probe -- always returns 200 if the process is running."""
+    return {"status": "ok", "app": settings.APP_NAME, "env": settings.APP_ENV}
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness probe -- checks DB and Redis connectivity."""
+    checks = {}
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {e}"
+
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.REDIS_URL)
+        await r.ping()
+        await r.aclose()
+        checks["redis"] = "ok"
+    except Exception as e:
+        checks["redis"] = f"error: {e}"
+
+    all_ok = all(v == "ok" for v in checks.values())
+    return JSONResponse(
+        status_code=200 if all_ok else 503,
+        content={"status": "ready" if all_ok else "degraded", "checks": checks},
+    )

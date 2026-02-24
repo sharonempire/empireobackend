@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.geography.models import Campus, City, Country, University
 from app.modules.geography.schemas import CampusOut, CityOut, CountryOut, UniversityOut
 from app.modules.users.models import User
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/geography", tags=["Geography"])
 async def api_list_countries(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Country)
@@ -34,7 +34,7 @@ async def api_list_countries(
 @router.get("/countries/{country_id}", response_model=CountryOut)
 async def api_get_country(
     country_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Country).where(Country.id == country_id))
@@ -51,7 +51,7 @@ async def api_list_cities(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     country_id: int | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(City)
@@ -70,7 +70,7 @@ async def api_list_cities(
 @router.get("/cities/{city_id}", response_model=CityOut)
 async def api_get_city(
     city_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(City).where(City.id == city_id))
@@ -87,7 +87,7 @@ async def api_list_universities(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     city_id: int | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(University)
@@ -106,7 +106,7 @@ async def api_list_universities(
 @router.get("/universities/{university_id}", response_model=UniversityOut)
 async def api_get_university(
     university_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(University).where(University.id == university_id))
@@ -123,7 +123,7 @@ async def api_list_campuses(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     university_id: int | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Campus)
@@ -142,7 +142,7 @@ async def api_list_campuses(
 @router.get("/campuses/{campus_id}", response_model=CampusOut)
 async def api_get_campus(
     campus_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Campus).where(Campus.id == campus_id))

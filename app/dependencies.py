@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,14 @@ security = HTTPBearer()
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
+    request: Request | None = None,
 ) -> User:
+    """Return current authenticated user and attach user id to request.state for logging.
+
+    The request parameter is optional so this function can be used in contexts where
+    a Request object isn't available (tests). When available we set request.state.user_id
+    for structured logging.
+    """
     payload = decode_token(credentials.credentials)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
@@ -35,6 +42,14 @@ async def get_current_user(
 
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+    # Attach to request.state for middleware logging
+    try:
+        if request is not None:
+            request.state.user_id = str(user.id)
+    except Exception:
+        # Non-fatal; don't break auth for logging failures
+        pass
 
     return user
 

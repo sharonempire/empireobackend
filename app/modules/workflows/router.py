@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.users.models import User
 from app.modules.workflows.models import WorkflowDefinition, WorkflowInstance
 from app.modules.workflows.schemas import WorkflowDefinitionOut, WorkflowInstanceOut
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/workflows", tags=["Workflows"])
 
 @router.get("/definitions", response_model=list[WorkflowDefinitionOut])
 async def api_list_definitions(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("workflows", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(WorkflowDefinition).where(WorkflowDefinition.is_active == True).order_by(WorkflowDefinition.name))
@@ -29,7 +29,7 @@ async def api_list_instances(
     size: int = Query(20, ge=1, le=100),
     entity_type: str | None = None,
     entity_id: UUID | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("workflows", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(WorkflowInstance)

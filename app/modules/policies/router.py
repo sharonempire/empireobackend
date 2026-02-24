@@ -9,7 +9,7 @@ from app.core.exceptions import NotFoundError
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.policies.models import Policy
 from app.modules.policies.schemas import PolicyCreate, PolicyOut, PolicyUpdate
 from app.modules.users.models import User
@@ -24,6 +24,7 @@ async def api_list_policies(
     category: str | None = None,
     department: str | None = None,
     is_active: bool | None = None,
+    current_user: User = Depends(require_perm("policies", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Policy)
@@ -48,6 +49,7 @@ async def api_list_policies(
 @router.get("/{policy_id}", response_model=PolicyOut)
 async def api_get_policy(
     policy_id: UUID,
+    current_user: User = Depends(require_perm("policies", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Policy).where(Policy.id == policy_id))
@@ -60,7 +62,7 @@ async def api_get_policy(
 @router.post("/", response_model=PolicyOut, status_code=201)
 async def api_create_policy(
     data: PolicyCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("policies", "create")),
     db: AsyncSession = Depends(get_db),
 ):
     policy = Policy(**data.model_dump())
@@ -76,7 +78,7 @@ async def api_create_policy(
 async def api_update_policy(
     policy_id: UUID,
     data: PolicyUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("policies", "update")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Policy).where(Policy.id == policy_id))

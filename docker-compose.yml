@@ -1,18 +1,19 @@
-version: "3.9"
-
 services:
-  api:
-    build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - ./app:/app/app
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: empireo
+      POSTGRES_PASSWORD: empireo_local
+      POSTGRES_DB: empireo
     ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    depends_on:
-      redis:
-        condition: service_healthy
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U empireo -d empireo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   redis:
@@ -21,8 +22,32 @@ services:
       - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - ./permissions.yaml:/app/permissions.yaml
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ready || exit 1"]
       interval: 10s
-      timeout: 5s
+      timeout: 3s
       retries: 5
     restart: unless-stopped
 
@@ -34,6 +59,11 @@ services:
     env_file:
       - .env
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  pgdata:
