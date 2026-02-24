@@ -19,3 +19,10 @@ class RefreshRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class BootstrapRequest(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str
+    role: str = "admin"

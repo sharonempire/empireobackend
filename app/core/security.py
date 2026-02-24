@@ -8,13 +8,22 @@ from app.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+MAX_PASSWORD_BYTES = 1024
+
+
+def _prehash(password: str) -> str:
+    """SHA-256 pre-hash to bypass bcrypt's 72-byte input limit."""
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise ValueError("Password too long")
+    return pwd_context.hash(_prehash(password))
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(_prehash(plain), hashed)
 
 
 def create_access_token(subject: str, extra: dict | None = None) -> str:

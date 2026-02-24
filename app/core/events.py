@@ -10,7 +10,7 @@ async def log_event(
     event_type: str,
     actor_id: UUID | None,
     entity_type: str,
-    entity_id: UUID,
+    entity_id: UUID | None = None,
     metadata: dict | None = None,
     actor_type: str = "user",
 ) -> Event:

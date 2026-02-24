@@ -1,11 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+import secrets
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status, Request
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.modules.auth import service as auth_service
-from app.modules.auth.schemas import LoginRequest, RefreshRequest, TokenResponse, ChangePasswordRequest
+from app.modules.auth.schemas import (
+    BootstrapRequest,
+    ChangePasswordRequest,
+    LoginRequest,
+    RefreshRequest,
+    TokenResponse,
+)
 from app.dependencies import get_current_user
-from app.modules.users.models import User
+from app.modules.users.models import Role, User, UserRole
+from app.core.security import hash_password
 from app.core.rate_limiter import limit_key
 from app.core.events import log_event
 
@@ -104,3 +115,63 @@ async def change_password(
     )
     await db.commit()
     return {"ok": True, "revoked": revoked}
+
+
+@router.post("/bootstrap", response_model=None)
+async def bootstrap(
+    data: BootstrapRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    x_bootstrap_token: str = Header(alias="X-Bootstrap-Token"),
+):
+    """One-time admin bootstrap. Only works when no users exist and a valid
+    BOOTSTRAP_TOKEN is configured and supplied via X-Bootstrap-Token header."""
+
+    # Guard: token must be configured on server
+    if not settings.BOOTSTRAP_TOKEN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bootstrap not configured")
+
+    # Guard: constant-time comparison to prevent timing attacks
+    if not secrets.compare_digest(x_bootstrap_token, settings.BOOTSTRAP_TOKEN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid bootstrap token")
+
+    # Guard: must be a fresh database with zero users
+    user_count = (await db.execute(select(func.count()).select_from(User))).scalar()
+    if user_count > 0:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bootstrap disabled (users already exist)")
+
+    # Resolve the requested role
+    role = (await db.execute(select(Role).where(Role.name == data.role))).scalar_one_or_none()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role '{data.role}' not found. Seed roles first (admin, manager, counselor, processor, viewer).",
+        )
+
+    # Create the first user
+    user = User(
+        email=data.email,
+        full_name=data.full_name,
+        hashed_password=hash_password(data.password),
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+
+    # Assign role
+    db.add(UserRole(user_id=user.id, role_id=role.id))
+    await db.flush()
+
+    # Audit
+    ip = request.client.host if request.client else "unknown"
+    await log_event(
+        db,
+        "auth.bootstrap_created",
+        actor_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        metadata={"email": data.email, "role": data.role, "ip": ip},
+    )
+    await db.commit()
+
+    return {"ok": True, "user_id": str(user.id), "email": user.email, "role": data.role}
