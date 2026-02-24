@@ -1,0 +1,161 @@
+# permissions.yaml — Single source of truth for Empireo RBAC
+# Run: python -m app.scripts.seed_permissions
+
+roles:
+  admin:
+    description: "Full system administrator"
+  ceo:
+    description: "Organization owner — same access as admin"
+  manager:
+    description: "Team manager — approve, assign, view reports"
+  counselor:
+    description: "Student counselor — manage leads, students, cases"
+  processor:
+    description: "Document/visa processor"
+  marketing:
+    description: "Marketing team — leads, courses, IG"
+  staff:
+    description: "General staff — basic read access"
+
+permissions:
+  users:
+    actions: [read, create, update, delete]
+  students:
+    actions: [read, create, update, delete, assign, export]
+  cases:
+    actions: [read, create, update, delete, assign]
+  applications:
+    actions: [read, create, update, delete]
+  documents:
+    actions: [read, create, update, delete, verify]
+  tasks:
+    actions: [read, create, update, delete, assign]
+  events:
+    actions: [read]
+  approvals:
+    actions: [read, review]
+  notifications:
+    actions: [read, create]
+  workflows:
+    actions: [read, create, update]
+  leads:
+    actions: [read, create, update, delete, assign, export]
+  courses:
+    actions: [read, create, update, delete]
+  profiles:
+    actions: [read, update]
+  geography:
+    actions: [read]
+  intakes:
+    actions: [read, create, update]
+  jobs:
+    actions: [read, create, update, delete]
+  call_events:
+    actions: [read]
+  chat:
+    actions: [read, create]
+  payments:
+    actions: [read, create]
+  attendance:
+    actions: [read, create, update]
+  ig_sessions:
+    actions: [read, update]
+  ai_artifacts:
+    actions: [read, create]
+  policies:
+    actions: [read, create, update, delete]
+  employee_automation:
+    actions: [read, create, update]
+
+# Which roles get which permissions
+role_permissions:
+  admin: "*"      # all permissions
+  ceo: "*"        # all permissions
+  manager:
+    users: [read]
+    students: [read, create, update, assign, export]
+    cases: [read, create, update, assign]
+    applications: [read, create, update]
+    documents: [read, create, update, verify]
+    tasks: [read, create, update, delete, assign]
+    events: [read]
+    approvals: [read, review]
+    notifications: [read, create]
+    workflows: [read, create, update]
+    leads: [read, create, update, assign, export]
+    courses: [read]
+    profiles: [read, update]
+    geography: [read]
+    intakes: [read]
+    jobs: [read]
+    call_events: [read]
+    chat: [read, create]
+    payments: [read]
+    attendance: [read, create, update]
+    ig_sessions: [read]
+    ai_artifacts: [read, create]
+    policies: [read]
+    employee_automation: [read, create, update]
+  counselor:
+    students: [read, create, update]
+    cases: [read, create, update]
+    applications: [read, create, update]
+    documents: [read, create]
+    tasks: [read, create, update]
+    events: [read]
+    notifications: [read]
+    leads: [read, create, update]
+    courses: [read]
+    profiles: [read]
+    geography: [read]
+    intakes: [read]
+    call_events: [read]
+    chat: [read, create]
+    attendance: [read]
+    ai_artifacts: [read]
+    policies: [read]
+  processor:
+    students: [read, update]
+    cases: [read, update]
+    applications: [read, create, update]
+    documents: [read, create, update, verify]
+    tasks: [read, create, update]
+    events: [read]
+    notifications: [read]
+    leads: [read]
+    courses: [read]
+    profiles: [read]
+    geography: [read]
+    intakes: [read]
+    attendance: [read]
+    policies: [read]
+  marketing:
+    leads: [read, create, update, assign]
+    courses: [read, create, update]
+    ig_sessions: [read, update]
+    students: [read]
+    profiles: [read]
+    geography: [read]
+    events: [read]
+    notifications: [read]
+    jobs: [read, create, update]
+    policies: [read]
+  staff:
+    students: [read]
+    cases: [read]
+    applications: [read]
+    documents: [read]
+    tasks: [read]
+    events: [read]
+    notifications: [read]
+    leads: [read]
+    courses: [read]
+    profiles: [read]
+    geography: [read]
+    intakes: [read]
+    jobs: [read]
+    call_events: [read]
+    chat: [read]
+    payments: [read]
+    attendance: [read]
+    policies: [read]

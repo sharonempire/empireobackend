@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.payments.models import Payment
 from app.modules.payments.schemas import PaymentOut
 from app.modules.users.models import User
@@ -18,7 +18,7 @@ async def api_list_payments(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     status: str | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("payments", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Payment)
@@ -37,7 +37,7 @@ async def api_list_payments(
 @router.get("/{payment_id}", response_model=PaymentOut)
 async def api_get_payment(
     payment_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("payments", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Payment).where(Payment.id == payment_id))

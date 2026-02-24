@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.chat.models import ChatConversation, ChatMessage
 from app.modules.chat.schemas import ChatConversationOut, ChatMessageOut
 from app.modules.users.models import User
@@ -19,7 +19,7 @@ async def api_list_conversations(
     size: int = Query(20, ge=1, le=100),
     counselor_id: str | None = None,
     lead_uuid: str | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("chat", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(ChatConversation)
@@ -41,7 +41,7 @@ async def api_list_conversations(
 @router.get("/conversations/{conversation_id}", response_model=ChatConversationOut)
 async def api_get_conversation(
     conversation_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("chat", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(ChatConversation).where(ChatConversation.id == conversation_id))
@@ -56,7 +56,7 @@ async def api_list_messages(
     conversation_id: int,
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("chat", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(ChatMessage).where(ChatMessage.conversation_id == conversation_id)

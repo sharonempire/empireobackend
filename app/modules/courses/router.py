@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.courses.models import Course
 from app.modules.courses.schemas import CourseOut
 from app.modules.users.models import User
@@ -19,7 +19,7 @@ async def api_list_courses(
     size: int = Query(20, ge=1, le=100),
     country: str | None = None,
     program_level: str | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("courses", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Course)
@@ -43,7 +43,7 @@ async def api_search_courses(
     q: str = Query(..., min_length=1),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("courses", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     pattern = f"%{q}%"
@@ -61,7 +61,7 @@ async def api_search_courses(
 @router.get("/{course_id}", response_model=CourseOut)
 async def api_get_course(
     course_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("courses", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Course).where(Course.id == course_id))

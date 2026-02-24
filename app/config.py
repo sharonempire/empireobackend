@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Empireo Brain"
     APP_ENV: str = "development"
     DEBUG: bool = True
+    LOG_LEVEL: str = "INFO"
 
     CORS_ORIGINS: list[str] = ["*"]
 

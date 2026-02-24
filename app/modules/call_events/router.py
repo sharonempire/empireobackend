@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.call_events.models import CallEvent
 from app.modules.call_events.schemas import CallEventOut
 from app.modules.users.models import User
@@ -21,7 +21,7 @@ async def api_list_call_events(
     call_uuid: str | None = None,
     agent_number: str | None = None,
     call_date: str | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("call_events", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(CallEvent)
@@ -49,7 +49,7 @@ async def api_list_call_events(
 @router.get("/{call_event_id}", response_model=CallEventOut)
 async def api_get_call_event(
     call_event_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("call_events", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CallEvent).where(CallEvent.id == call_event_id))

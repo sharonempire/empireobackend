@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.attendance.models import Attendance
 from app.modules.attendance.schemas import AttendanceOut
 from app.modules.users.models import User
@@ -22,7 +22,7 @@ async def api_list_attendance(
     employee_id: UUID | None = None,
     date: str | None = None,
     attendance_status: str | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("attendance", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Attendance)
@@ -47,7 +47,7 @@ async def api_list_attendance(
 @router.get("/{attendance_id}", response_model=AttendanceOut)
 async def api_get_attendance(
     attendance_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("attendance", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Attendance).where(Attendance.id == attendance_id)

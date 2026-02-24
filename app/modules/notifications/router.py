@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.notifications.models import Notification
 from app.modules.notifications.schemas import NotificationOut
 from app.modules.users.models import User
@@ -21,7 +21,7 @@ async def api_list_notifications(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     is_read: bool | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("notifications", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Notification).where(Notification.user_id == current_user.id)
@@ -39,7 +39,7 @@ async def api_list_notifications(
 
 @router.post("/read-all")
 async def api_read_all(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("notifications", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     await db.execute(
@@ -54,7 +54,7 @@ async def api_read_all(
 @router.patch("/{notification_id}/read", response_model=NotificationOut)
 async def api_read_one(
     notification_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("notifications", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(

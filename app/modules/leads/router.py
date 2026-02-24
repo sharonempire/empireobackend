@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_perm
 from app.modules.leads.models import Lead, LeadInfo
 from app.modules.leads.schemas import LeadDetailOut, LeadInfoOut, LeadOut
 from app.modules.users.models import User
@@ -22,7 +22,7 @@ async def api_list_leads(
     heat_status: str | None = None,
     lead_tab: str | None = None,
     assigned_to: str | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Lead)
@@ -60,7 +60,7 @@ async def api_list_leads(
 @router.get("/{lead_id}", response_model=LeadDetailOut)
 async def api_get_lead(
     lead_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Lead).where(Lead.id == lead_id))

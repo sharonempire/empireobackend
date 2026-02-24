@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
@@ -35,3 +36,8 @@ def decode_token(token: str) -> dict | None:
         return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
     except JWTError:
         return None
+
+
+def hash_token(token: str) -> str:
+    """SHA-256 hash of a token for safe DB storage."""
+    return hashlib.sha256(token.encode()).hexdigest()
