@@ -54,7 +54,7 @@ async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Dep
     return tokens
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=None)
 async def logout(data: RefreshRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Revoke a single refresh token (logout).
 
@@ -68,7 +68,7 @@ async def logout(data: RefreshRequest, db: AsyncSession = Depends(get_db), curre
     return {"ok": ok}
 
 
-@router.post("/logout_all")
+@router.post("/logout_all", response_model=None)
 async def logout_all(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Revoke all refresh tokens for the current user (logout everywhere)."""
     count = await auth_service.revoke_all_user_tokens(db, current_user.id, reason="logout_all")
@@ -78,7 +78,7 @@ async def logout_all(db: AsyncSession = Depends(get_db), current_user: User = De
 
 
 
-@router.post("/change_password")
+@router.post("/change_password", response_model=None)
 async def change_password(
     data: ChangePasswordRequest,
     db: AsyncSession = Depends(get_db),

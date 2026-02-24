@@ -16,14 +16,9 @@ security = HTTPBearer()
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
-    request: Request | None = None,
+    request: Request = None,
 ) -> User:
-    """Return current authenticated user and attach user id to request.state for logging.
-
-    The request parameter is optional so this function can be used in contexts where
-    a Request object isn't available (tests). When available we set request.state.user_id
-    for structured logging.
-    """
+    """Return current authenticated user and attach user id to request.state for logging."""
     payload = decode_token(credentials.credentials)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
