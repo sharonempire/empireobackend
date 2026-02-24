@@ -2,7 +2,7 @@ from datetime import date, datetime, time
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FileIngestionOut(BaseModel):
@@ -163,7 +163,7 @@ class WorkLogOut(BaseModel):
     ended_at: Optional[datetime] = None
     duration_minutes: Optional[float] = None
     source: str
-    metadata: Any = {}
+    metadata: Any = Field(default={}, validation_alias="meta")
     event_id: Optional[UUID] = None
     created_at: Optional[datetime] = None
 
@@ -227,7 +227,7 @@ class TrainingRecordOut(BaseModel):
     certificate_url: Optional[str] = None
     expiry_date: Optional[date] = None
     assigned_by: Optional[UUID] = None
-    metadata: Any = {}
+    metadata: Any = Field(default={}, validation_alias="meta")
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
