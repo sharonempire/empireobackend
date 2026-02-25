@@ -4,6 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
+from app.core.search_engine import hybrid_search
 from app.modules.leads.models import Lead, LeadInfo
 
 
@@ -16,19 +17,32 @@ async def list_leads(
     heat_status: str | None = None,
     lead_tab: str | None = None,
     assigned_to: str | None = None,
-) -> tuple[list[Lead], int]:
+) -> tuple[list, int]:
+    # Use hybrid search when a search query is provided
+    if search:
+        filters: dict[str, str] = {}
+        if status:
+            filters["status"] = status
+        if heat_status:
+            filters["heat_status"] = heat_status
+        if lead_tab:
+            filters["lead_tab"] = lead_tab
+        if assigned_to:
+            filters["assigned_to"] = assigned_to
+        return await hybrid_search(
+            db=db,
+            table_name="leadslist",
+            query=search,
+            search_columns=["name", "email"],
+            filters=filters or None,
+            page=page,
+            size=size,
+        )
+
+    # No search query — standard filtered list
     stmt = select(Lead)
     count_stmt = select(func.count()).select_from(Lead)
 
-    if search:
-        pattern = f"%{search}%"
-        condition = or_(
-            Lead.name.ilike(pattern),
-            Lead.email.ilike(pattern),
-            Lead.phone_norm.ilike(pattern),
-        )
-        stmt = stmt.where(condition)
-        count_stmt = count_stmt.where(condition)
     if status:
         stmt = stmt.where(Lead.status == status)
         count_stmt = count_stmt.where(Lead.status == status)

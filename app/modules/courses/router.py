@@ -24,7 +24,7 @@ async def api_list_courses(
     return {**paginate_metadata(total, page, size), "items": items}
 
 
-@router.get("/search", response_model=PaginatedResponse[CourseOut])
+@router.get("/search")
 async def api_search_courses(
     q: str = Query(..., min_length=1),
     page: int = Query(1, ge=1),
@@ -32,6 +32,7 @@ async def api_search_courses(
     current_user: User = Depends(require_perm("courses", "read")),
     db: AsyncSession = Depends(get_db),
 ):
+    """Hybrid search: full-text (TSVECTOR) + trigram fuzzy + ILIKE, ranked by relevance."""
     items, total = await service.search_courses(db, q, page, size)
     return {**paginate_metadata(total, page, size), "items": items}
 

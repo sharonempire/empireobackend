@@ -1,9 +1,10 @@
-"""Courses service layer."""
+"""Courses service layer with hybrid search."""
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
+from app.core.search_engine import hybrid_search
 from app.modules.courses.models import Course
 
 
@@ -35,20 +36,17 @@ async def search_courses(
     q: str,
     page: int = 1,
     size: int = 20,
-) -> tuple[list[Course], int]:
-    pattern = f"%{q}%"
-    condition = or_(
-        Course.program_name.ilike(pattern),
-        Course.university.ilike(pattern),
-        Course.country.ilike(pattern),
+) -> tuple[list[dict], int]:
+    """Hybrid search on courses — full-text (TSVECTOR) + trigram + ILIKE."""
+    return await hybrid_search(
+        db=db,
+        table_name="courses",
+        query=q,
+        search_columns=["program_name", "university", "country"],
+        tsvector_column="search_vector",
+        page=page,
+        size=size,
     )
-    stmt = select(Course).where(condition)
-    count_stmt = select(func.count()).select_from(Course).where(condition)
-
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Course.program_name)
-    result = await db.execute(stmt)
-    return result.scalars().all(), total
 
 
 async def get_course(db: AsyncSession, course_id: int) -> Course:
