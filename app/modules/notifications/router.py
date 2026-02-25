@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
@@ -31,6 +32,7 @@ async def api_read_all(
     db: AsyncSession = Depends(get_db),
 ):
     count = await service.mark_all_read(db, current_user.id)
+    await log_event(db, "notification.read_all", current_user.id, "notification", "bulk", {"count": count})
     await db.commit()
     return {"detail": "All notifications marked as read", "count": count}
 
@@ -42,5 +44,6 @@ async def api_read_one(
     db: AsyncSession = Depends(get_db),
 ):
     notification = await service.mark_one_read(db, notification_id, current_user.id)
+    await log_event(db, "notification.read", current_user.id, "notification", str(notification_id), {})
     await db.commit()
     return notification

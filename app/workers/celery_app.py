@@ -27,6 +27,10 @@ celery.conf.update(
             "task": "process_file_ingestion_batch",
             "schedule": crontab(minute=0),  # Every hour at :00
         },
+        "detect-stuck-cases-daily": {
+            "task": "detect_stuck_cases",
+            "schedule": crontab(hour=7, minute=30),  # 7:30 AM UTC daily (1 PM IST)
+        },
     },
 )
 celery.autodiscover_tasks(["app.workers"])

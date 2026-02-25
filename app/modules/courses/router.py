@@ -37,6 +37,24 @@ async def api_search_courses(
     return {**paginate_metadata(total, page, size), "items": items}
 
 
+@router.get("/eligible/{lead_id}")
+async def api_eligible_courses(
+    lead_id: int,
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(require_perm("courses", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Find courses a student is eligible for based on their profile.
+
+    Uses the DB function `search_eligible_courses` which matches
+    education level, percentage, backlogs, English proficiency,
+    budget, country preference, and domain tags against the full catalog.
+    """
+    items, total = await service.search_eligible_courses(db, lead_id, page, size)
+    return {**paginate_metadata(total, page, size), "items": items}
+
+
 @router.get("/{course_id}", response_model=CourseOut)
 async def api_get_course(
     course_id: int,

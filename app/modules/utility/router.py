@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
@@ -38,6 +39,9 @@ async def api_create_short_link(
     db: AsyncSession = Depends(get_db),
 ):
     item = await service.create_short_link(db, data)
+    await log_event(db, "short_link.created", current_user.id, "short_link", str(item.id), {
+        "code": item.code, "target_url": data.target_url,
+    })
     await db.commit()
     return item
 

@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events import log_event
 from app.database import get_db
 from app.dependencies import require_perm
 from app.modules.ai_copilot.schemas import (
@@ -60,4 +61,9 @@ async def api_draft_email(
     db: AsyncSession = Depends(get_db),
 ):
     """Generate an AI-powered email draft for a student or lead."""
-    return await draft_email(db, data.entity_type, data.entity_id, data.email_type)
+    result = await draft_email(db, data.entity_type, data.entity_id, data.email_type)
+    await log_event(db, "ai_copilot.email_drafted", current_user.id, data.entity_type, str(data.entity_id), {
+        "email_type": data.email_type,
+    })
+    await db.commit()
+    return result

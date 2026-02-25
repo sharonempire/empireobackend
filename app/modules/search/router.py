@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events import log_event
 from app.database import get_db
 from app.dependencies import require_perm
 from app.modules.search import service
@@ -73,6 +74,9 @@ async def api_create_domain_keyword(
     db: AsyncSession = Depends(get_db),
 ):
     item = await service.create_domain_keyword(db, data)
+    await log_event(db, "search_config.domain_created", current_user.id, "domain_keyword_map", str(item.id), {
+        "domain": data.domain,
+    })
     await db.commit()
     return item
 
@@ -92,6 +96,9 @@ async def api_create_synonym(
     db: AsyncSession = Depends(get_db),
 ):
     item = await service.create_synonym(db, data)
+    await log_event(db, "search_config.synonym_created", current_user.id, "search_synonym", str(item.id), {
+        "term": data.term,
+    })
     await db.commit()
     return item
 
@@ -111,5 +118,8 @@ async def api_create_stopword(
     db: AsyncSession = Depends(get_db),
 ):
     item = await service.create_stopword(db, data)
+    await log_event(db, "search_config.stopword_created", current_user.id, "stopword", str(item.id), {
+        "word": data.word,
+    })
     await db.commit()
     return item

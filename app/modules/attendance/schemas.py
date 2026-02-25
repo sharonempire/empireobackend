@@ -14,3 +14,12 @@ class AttendanceOut(BaseModel):
     employee_id: UUID | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AttendanceCheckIn(BaseModel):
+    employee_id: UUID
+    date: str | None = None  # "Friday, February 25, 2026" format, or auto-filled
+
+
+class AttendanceCheckOut(BaseModel):
+    pass  # checkout time is set server-side

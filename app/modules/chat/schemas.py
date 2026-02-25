@@ -26,3 +26,13 @@ class ChatMessageOut(BaseModel):
     voice_duration: Optional[int] = None
     course_id: Optional[str] = None
     course_deatails: Optional[Any] = None  # typo preserved from DB
+
+
+class ChatMessageCreate(BaseModel):
+    conversation_id: int
+    sender_id: str
+    message: str
+    message_type: str = "text"
+    voice_duration: Optional[int] = None
+    course_id: Optional[str] = None
+    course_deatails: Optional[Any] = None

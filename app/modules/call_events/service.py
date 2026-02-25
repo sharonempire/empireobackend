@@ -44,3 +44,42 @@ async def get_call_event(db: AsyncSession, call_event_id: int) -> CallEvent:
     if not call_event:
         raise NotFoundError("Call event not found")
     return call_event
+
+
+async def ingest_call_event(db: AsyncSession, data: dict) -> CallEvent:
+    """Ingest a call event from telephony webhook.
+
+    DB triggers auto-handle on INSERT:
+    - `call_events_norm_maint`: normalizes caller/agent phone numbers
+    - `handle_call_event`: classifies calls, resolves agents from profiles,
+      creates or matches leads by phone, appends call info to lead_info
+    """
+    event = CallEvent(**data)
+    db.add(event)
+    await db.flush()
+    await db.refresh(event)
+    return event
+
+
+async def get_call_stats(db: AsyncSession, employee_id: str | None = None) -> dict:
+    """Get call event statistics."""
+    from sqlalchemy import text
+
+    base = "SELECT COUNT(*) as total, " \
+           "SUM(CASE WHEN total_duration > 0 THEN 1 ELSE 0 END) as connected, " \
+           "AVG(CASE WHEN conversation_duration > 0 THEN conversation_duration END) as avg_duration, " \
+           "SUM(CASE WHEN recording_url IS NOT NULL THEN 1 ELSE 0 END) as with_recording " \
+           "FROM call_events"
+
+    if employee_id:
+        result = await db.execute(
+            text(base + " WHERE agent_phone_norm = (SELECT phone::text FROM profiles WHERE id = :emp_id LIMIT 1)"),
+            {"emp_id": employee_id},
+        )
+    else:
+        result = await db.execute(text(base))
+
+    row = result.first()
+    if not row:
+        return {"total": 0, "connected": 0, "avg_duration": 0, "with_recording": 0}
+    return dict(row._mapping)

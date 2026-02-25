@@ -380,3 +380,95 @@ async def api_update_training_record(
                     data.model_dump(exclude_unset=True))
     await db.commit()
     return item
+
+
+# ==================== Resume Parsing ====================
+# Mirrors Supabase Edge Function `parseresume` (v84)
+
+
+@router.post("/file-ingestions/{ingestion_id}/parse-resume", status_code=202)
+async def api_parse_resume(
+    ingestion_id: UUID,
+    current_user: User = Depends(require_perm("employee_automation", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger resume parsing for a file ingestion.
+
+    Dispatches an async Celery task that:
+    1. Downloads the PDF from S3
+    2. Extracts text from PDF
+    3. Uses GPT-4o-mini to extract structured resume data
+    4. Stores result in extracted_data JSONB field
+
+    Mirrors the Supabase Edge Function `parseresume` (v84).
+    """
+    # Verify the ingestion exists
+    ingestion = await service.get_file_ingestion(db, ingestion_id)
+    await log_event(db, "resume.parse_requested", current_user.id, "file_ingestion", str(ingestion_id), {
+        "file_name": ingestion.file_name,
+    })
+    await db.commit()
+
+    # Dispatch Celery task
+    from app.workers.tasks import parse_resume
+    parse_resume.delay(str(ingestion_id))
+
+    return {
+        "file_ingestion_id": str(ingestion_id),
+        "status": "queued",
+        "message": "Resume parsing task has been queued. Check file ingestion status for results.",
+    }
+
+
+# ==================== Stuck Case Detection (manual trigger) ====================
+
+
+@router.post("/detect-stuck-cases", status_code=202)
+async def api_detect_stuck_cases(
+    current_user: User = Depends(require_perm("employee_automation", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually trigger stuck case detection.
+
+    Normally runs daily via Celery Beat, but can be triggered manually.
+    Mirrors the Supabase Edge Function `eb-stuck-detector` (v2).
+    """
+    await log_event(db, "stuck_detection.manual_trigger", current_user.id, "system", "stuck_detector", {})
+    await db.commit()
+
+    from app.workers.tasks import detect_stuck_cases
+    detect_stuck_cases.delay()
+
+    return {
+        "status": "queued",
+        "message": "Stuck case detection task has been queued.",
+    }
+
+
+# ==================== Compute Metrics (manual trigger) ====================
+
+
+@router.post("/compute-metrics/{employee_id}", status_code=202)
+async def api_compute_metrics(
+    employee_id: UUID,
+    period_type: str = Query("daily", regex="^(daily|weekly|monthly)$"),
+    current_user: User = Depends(require_perm("employee_automation", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually trigger employee metrics computation.
+
+    Normally runs daily via Celery Beat, but can be triggered per-employee.
+    """
+    await log_event(db, "metrics.manual_compute", current_user.id, "employee_metric", str(employee_id), {
+        "period_type": period_type,
+    })
+    await db.commit()
+
+    from app.workers.tasks import compute_employee_metrics
+    compute_employee_metrics.delay(str(employee_id), period_type)
+
+    return {
+        "employee_id": str(employee_id),
+        "period_type": period_type,
+        "status": "queued",
+    }

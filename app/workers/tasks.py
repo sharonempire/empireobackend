@@ -97,7 +97,11 @@ def _extract_text_from_file(file_path: str, mime_type: str | None = None) -> str
 # ---------------------------------------------------------------------------
 @celery.task(name="send_notification", bind=True, max_retries=3)
 def send_notification(self, user_id: str, title: str, message: str, notification_type: str = "general"):
-    """Send a notification to a user (create DB record)."""
+    """Send a notification to a user (create DB record + FCM push).
+
+    1. Creates an eb_notifications DB record
+    2. Looks up user FCM tokens and sends push via FCM HTTP v1 API
+    """
     try:
         from app.database import sync_session_factory
         from app.modules.notifications.models import Notification
@@ -111,10 +115,73 @@ def send_notification(self, user_id: str, title: str, message: str, notification
             )
             db.add(notification)
             db.commit()
-            logger.info("Notification sent to user %s: %s", user_id, title)
-            return {"user_id": user_id, "title": title, "status": "sent"}
+            logger.info("Notification record created for user %s: %s", user_id, title)
+
+        # Dispatch FCM push as a separate task to avoid blocking
+        send_fcm_push.delay(user_id, title, message, {"type": notification_type})
+        return {"user_id": user_id, "title": title, "status": "sent"}
     except Exception as exc:
         logger.error("Failed to send notification: %s", exc)
+        raise self.retry(exc=exc, countdown=30)
+
+
+# ---------------------------------------------------------------------------
+# Task: send_fcm_push — mirrors Supabase Edge Function `Notification` (v18)
+# ---------------------------------------------------------------------------
+@celery.task(name="send_fcm_push", bind=True, max_retries=3)
+def send_fcm_push(self, user_id: str, title: str, body: str, data: dict | None = None):
+    """Send FCM push notification to all devices of a user.
+
+    Mirrors the Supabase Edge Function `Notification` which:
+    1. Gets Google OAuth2 access token via service account
+    2. Looks up FCM tokens for the user
+    3. Sends push via FCM HTTP v1 API
+    """
+    try:
+        from app.core.fcm_service import send_push_notification, _get_google_access_token, _get_project_id
+        from app.config import settings
+
+        if not settings.GOOGLE_SERVICE_ACCOUNT_KEY:
+            logger.info("FCM not configured, skipping push for user %s", user_id)
+            return {"user_id": user_id, "status": "skipped", "reason": "fcm_not_configured"}
+
+        # Look up FCM tokens synchronously
+        from app.database import sync_session_factory
+        from app.modules.push_tokens.models import UserFCMToken, UserPushToken
+        from sqlalchemy import select
+
+        tokens = set()
+        with sync_session_factory() as db:
+            push_result = db.execute(
+                select(UserPushToken.fcm_token).where(UserPushToken.user_id == user_id)
+            )
+            for row in push_result.all():
+                if row[0]:
+                    tokens.add(row[0])
+
+            fcm_result = db.execute(
+                select(UserFCMToken.fcm_token).where(UserFCMToken.user_id == user_id)
+            )
+            for row in fcm_result.all():
+                if row[0]:
+                    tokens.add(row[0])
+
+        if not tokens:
+            logger.info("No FCM tokens for user %s", user_id)
+            return {"user_id": user_id, "status": "no_tokens"}
+
+        # Send to all devices
+        results = []
+        for token in tokens:
+            result = asyncio.run(send_push_notification(token, title, body, data))
+            results.append(result)
+
+        sent = sum(1 for r in results if r.get("status") == "sent")
+        logger.info("FCM push sent to %d/%d devices for user %s", sent, len(tokens), user_id)
+        return {"user_id": user_id, "status": "sent", "devices_total": len(tokens), "devices_sent": sent}
+
+    except Exception as exc:
+        logger.error("FCM push failed for user %s: %s", user_id, exc)
         raise self.retry(exc=exc, countdown=30)
 
 
@@ -1271,3 +1338,358 @@ def process_file_ingestion_batch():
     except Exception as exc:
         logger.error("process_file_ingestion_batch failed: %s", exc)
         return {"dispatched": dispatched, "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Task: detect_stuck_cases — mirrors Supabase Edge Function `eb-stuck-detector` (v2)
+# ---------------------------------------------------------------------------
+# Stage timeout thresholds (in days) matching the Edge Function
+STAGE_TIMEOUTS = {
+    "initial_consultation": 3,
+    "documents_pending": 7,
+    "documents_collected": 3,
+    "university_shortlisted": 5,
+    "applied": 14,
+    "offer_received": 5,
+    "offer_accepted": 7,
+    "visa_processing": 30,
+    "travel_booked": 14,
+    "on_hold": 30,
+}
+
+
+@celery.task(name="detect_stuck_cases")
+def detect_stuck_cases():
+    """Detect cases stuck beyond stage timeouts and create follow-up tasks + notifications.
+
+    Mirrors the Supabase Edge Function `eb-stuck-detector` (v2) which:
+    1. Finds active cases where current_stage hasn't changed beyond the timeout threshold
+    2. Creates follow-up tasks assigned to the case counselor
+    3. Creates notifications for the counselor
+    4. Escalates to admins if stuck > 2x the timeout threshold
+
+    Runs daily via Celery Beat.
+    """
+    logger.info("Running stuck case detection")
+    try:
+        from app.database import sync_session_factory
+        from app.modules.cases.models import Case
+        from app.modules.tasks.models import Task as TaskModel
+        from app.modules.notifications.models import Notification
+        from app.modules.users.models import User, UserRole, Role
+        from sqlalchemy import select, and_
+
+        stuck_count = 0
+        escalated_count = 0
+
+        with sync_session_factory() as db:
+            now = datetime.now(timezone.utc)
+
+            # Find all active cases
+            result = db.execute(
+                select(Case).where(Case.is_active.is_(True))
+            )
+            active_cases = result.scalars().all()
+
+            # Get admin user IDs for escalation
+            admin_role_result = db.execute(
+                select(Role.id).where(Role.name == "admin")
+            )
+            admin_role = admin_role_result.scalar_one_or_none()
+
+            admin_ids = []
+            if admin_role:
+                admin_user_roles = db.execute(
+                    select(UserRole.user_id).where(UserRole.role_id == admin_role)
+                )
+                admin_ids = [str(row[0]) for row in admin_user_roles.all()]
+
+            for case in active_cases:
+                stage = case.current_stage
+                timeout_days = STAGE_TIMEOUTS.get(stage)
+                if timeout_days is None:
+                    continue  # No timeout for this stage (completed, cancelled, etc.)
+
+                # Determine how long the case has been in this stage
+                last_update = case.updated_at or case.created_at
+                if last_update is None:
+                    continue
+
+                # Make timezone-aware if needed
+                if last_update.tzinfo is None:
+                    last_update = last_update.replace(tzinfo=timezone.utc)
+
+                days_in_stage = (now - last_update).days
+
+                if days_in_stage < timeout_days:
+                    continue  # Not stuck yet
+
+                stuck_count += 1
+                counselor_id = case.assigned_counselor_id
+
+                # Check if we already created a task for this stuck case recently (last 7 days)
+                existing_task = db.execute(
+                    select(TaskModel).where(
+                        and_(
+                            TaskModel.entity_type == "case",
+                            TaskModel.entity_id == case.id,
+                            TaskModel.task_type == "stuck_follow_up",
+                            TaskModel.created_at >= now - timedelta(days=7),
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing_task:
+                    continue  # Already flagged recently
+
+                # Create follow-up task
+                task = TaskModel(
+                    id=uuid.uuid4(),
+                    entity_type="case",
+                    entity_id=case.id,
+                    title=f"Stuck case: {stage} for {days_in_stage} days",
+                    description=(
+                        f"Case has been in '{stage}' stage for {days_in_stage} days "
+                        f"(threshold: {timeout_days} days). Please review and take action."
+                    ),
+                    task_type="stuck_follow_up",
+                    assigned_to=counselor_id,
+                    priority="high" if days_in_stage >= timeout_days * 2 else "normal",
+                    status="pending",
+                    due_at=now + timedelta(days=1),
+                    created_at=now,
+                )
+                db.add(task)
+
+                # Notify the counselor
+                if counselor_id:
+                    notification = Notification(
+                        id=uuid.uuid4(),
+                        user_id=counselor_id,
+                        title=f"Case stuck in {stage}",
+                        message=(
+                            f"A case has been in '{stage}' for {days_in_stage} days. "
+                            f"Please review and progress it."
+                        ),
+                        notification_type="stuck_case",
+                        entity_type="case",
+                        entity_id=case.id,
+                        created_at=now,
+                    )
+                    db.add(notification)
+
+                    # Send FCM push for the counselor
+                    send_fcm_push.delay(
+                        str(counselor_id),
+                        f"Case stuck in {stage}",
+                        f"A case has been stuck for {days_in_stage} days. Please review.",
+                        {"type": "stuck_case", "case_id": str(case.id)},
+                    )
+
+                # Escalate if stuck > 2x the timeout
+                if days_in_stage >= timeout_days * 2:
+                    escalated_count += 1
+                    for admin_id in admin_ids:
+                        admin_notification = Notification(
+                            id=uuid.uuid4(),
+                            user_id=admin_id,
+                            title=f"ESCALATION: Case stuck {days_in_stage} days in {stage}",
+                            message=(
+                                f"Case {case.id} has been stuck in '{stage}' for {days_in_stage} days "
+                                f"(2x threshold of {timeout_days} days). Immediate attention required."
+                            ),
+                            notification_type="escalation",
+                            entity_type="case",
+                            entity_id=case.id,
+                            created_at=now,
+                        )
+                        db.add(admin_notification)
+
+                        send_fcm_push.delay(
+                            admin_id,
+                            f"ESCALATION: Case stuck {days_in_stage}d",
+                            f"Case stuck in '{stage}' for {days_in_stage} days. Needs immediate review.",
+                            {"type": "escalation", "case_id": str(case.id)},
+                        )
+
+            db.commit()
+
+        logger.info(
+            "Stuck case detection complete: %d stuck, %d escalated",
+            stuck_count, escalated_count,
+        )
+        return {"stuck": stuck_count, "escalated": escalated_count}
+
+    except Exception as exc:
+        logger.error("Stuck case detection failed: %s", exc)
+        return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Task: parse_resume — mirrors Supabase Edge Function `parseresume` (v84)
+# ---------------------------------------------------------------------------
+@celery.task(name="parse_resume", bind=True, max_retries=3)
+def parse_resume(self, file_ingestion_id: str):
+    """Parse a resume PDF using OpenAI GPT-4o-mini with structured output.
+
+    Mirrors the Supabase Edge Function `parseresume` which:
+    1. Downloads the PDF file
+    2. Uploads to OpenAI Files API
+    3. Uses GPT-4o-mini Responses API with a JSON schema for structured extraction
+    4. Returns structured resume data (personal_info, education, experience, skills, etc.)
+
+    The result is stored in the FileIngestion.extracted_data field.
+    """
+    logger.info("Parsing resume for file ingestion %s", file_ingestion_id)
+    tmp_path = None
+    try:
+        from app.database import sync_session_factory
+        from app.modules.employee_automation.models import FileIngestion
+        from sqlalchemy import select
+
+        with sync_session_factory() as db:
+            result = db.execute(select(FileIngestion).where(FileIngestion.id == file_ingestion_id))
+            ingestion = result.scalar_one_or_none()
+            if not ingestion:
+                logger.warning("File ingestion %s not found", file_ingestion_id)
+                return {"file_ingestion_id": file_ingestion_id, "status": "not_found"}
+
+            # Mark as processing
+            ingestion.processing_status = "processing"
+            db.commit()
+
+            # Download file from S3
+            file_key = ingestion.file_key
+            file_name = ingestion.file_name or "resume.pdf"
+            ext = "." + file_name.rsplit(".", 1)[-1] if "." in file_name else ".pdf"
+
+            if not file_key:
+                ingestion.processing_status = "failed"
+                ingestion.processing_error = "No file_key"
+                db.commit()
+                return {"file_ingestion_id": file_ingestion_id, "status": "no_file"}
+
+            try:
+                tmp_path = _download_s3_to_tempfile(file_key, suffix=ext)
+            except Exception as dl_err:
+                logger.error("Download failed for %s: %s", file_ingestion_id, dl_err)
+                ingestion.processing_status = "failed"
+                ingestion.processing_error = f"Download failed: {str(dl_err)[:500]}"
+                db.commit()
+                raise
+
+            # Extract text from PDF
+            try:
+                text_content = _extract_text_from_pdf(tmp_path)
+            except Exception as extract_err:
+                logger.error("PDF text extraction failed for %s: %s", file_ingestion_id, extract_err)
+                ingestion.processing_status = "failed"
+                ingestion.processing_error = f"PDF extraction failed: {str(extract_err)[:500]}"
+                db.commit()
+                raise
+
+            if not text_content or len(text_content.strip()) < 20:
+                ingestion.processing_status = "failed"
+                ingestion.processing_error = "No meaningful text extracted from PDF"
+                db.commit()
+                return {"file_ingestion_id": file_ingestion_id, "status": "no_text"}
+
+            # Run structured extraction via OpenAI
+            try:
+                from app.core.openai_service import get_openai_client
+                import json
+
+                client_sync = asyncio.run(_get_resume_extraction(text_content))
+                resume_data = client_sync
+            except Exception as ai_err:
+                logger.error("AI resume extraction failed for %s: %s", file_ingestion_id, ai_err)
+                # Still save raw text
+                ingestion.extracted_data = {
+                    "type": "resume",
+                    "raw_text": text_content[:5000],
+                    "ai_error": str(ai_err)[:500],
+                }
+                ingestion.processing_status = "completed"
+                ingestion.processing_completed_at = datetime.now(timezone.utc)
+                db.commit()
+                return {"file_ingestion_id": file_ingestion_id, "status": "partial", "detail": "ai_failed"}
+
+            # Store structured resume data
+            ingestion.extracted_data = {
+                "type": "resume",
+                "parsed_data": resume_data,
+                "raw_text_length": len(text_content),
+            }
+            ingestion.ai_model_used = resume_data.get("ai_model_used", "gpt-4o-mini")
+            ingestion.ai_tokens_used = resume_data.get("ai_tokens_used", 0)
+            ingestion.processing_status = "completed"
+            ingestion.processing_completed_at = datetime.now(timezone.utc)
+            db.commit()
+
+            logger.info("Resume parsed successfully for %s", file_ingestion_id)
+            return {"file_ingestion_id": file_ingestion_id, "status": "completed"}
+
+    except Exception as exc:
+        logger.error("Resume parsing failed for %s: %s", file_ingestion_id, exc)
+        try:
+            from app.database import sync_session_factory as sf
+            from app.modules.employee_automation.models import FileIngestion as FI
+            from sqlalchemy import update as upd
+
+            with sf() as db2:
+                db2.execute(
+                    upd(FI).where(FI.id == file_ingestion_id)
+                    .values(processing_status="failed", processing_error=str(exc)[:2000])
+                )
+                db2.commit()
+        except Exception:
+            pass
+        raise self.retry(exc=exc, countdown=60)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+async def _get_resume_extraction(text_content: str) -> dict:
+    """Extract structured resume data using OpenAI GPT-4o-mini.
+
+    Mirrors the parseresume Edge Function's JSON schema extraction.
+    """
+    from app.core.openai_service import get_openai_client
+    import json
+
+    client = get_openai_client()
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an expert resume parser. Extract structured data from the resume text. "
+                    "Return a JSON object with these fields:\n"
+                    "- personal_info: {full_name, email, phone, address, linkedin, date_of_birth, nationality}\n"
+                    "- education: [{institution, degree, field_of_study, start_date, end_date, grade_or_gpa}]\n"
+                    "- work_experience: [{company, title, start_date, end_date, description, responsibilities}]\n"
+                    "- skills: {technical: [], soft: [], languages: [], certifications: []}\n"
+                    "- english_proficiency: {test_type, overall_score, listening, reading, writing, speaking}\n"
+                    "- summary: brief 2-3 sentence professional summary\n"
+                    "- preferred_countries: [] (if mentioned)\n"
+                    "- preferred_programs: [] (if mentioned)\n"
+                    "Use null for missing fields. Return ONLY valid JSON."
+                ),
+            },
+            {"role": "user", "content": text_content[:25000]},  # Truncate to ~6K tokens
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.1,
+    )
+
+    content = response.choices[0].message.content
+    tokens_used = response.usage.total_tokens if response.usage else 0
+    result = json.loads(content)
+    result["ai_tokens_used"] = tokens_used
+    result["ai_model_used"] = "gpt-4o-mini"
+    return result

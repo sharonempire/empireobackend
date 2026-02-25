@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
 from app.modules.call_events import service
-from app.modules.call_events.schemas import CallEventOut
+from app.modules.call_events.schemas import CallEventCreate, CallEventOut
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/call-events", tags=["Call Events"])
@@ -26,6 +27,16 @@ async def api_list_call_events(
     return {**paginate_metadata(total, page, size), "items": items}
 
 
+@router.get("/stats")
+async def api_call_stats(
+    employee_id: str | None = None,
+    current_user: User = Depends(require_perm("call_events", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Call event statistics — total, connected, avg duration, with recording."""
+    return await service.get_call_stats(db, employee_id)
+
+
 @router.get("/{call_event_id}", response_model=CallEventOut)
 async def api_get_call_event(
     call_event_id: int,
@@ -33,3 +44,26 @@ async def api_get_call_event(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_call_event(db, call_event_id)
+
+
+@router.post("/", response_model=CallEventOut, status_code=201)
+async def api_ingest_call_event(
+    data: CallEventCreate,
+    current_user: User = Depends(require_perm("call_events", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ingest a call event from the telephony provider webhook.
+
+    DB triggers auto-handle:
+    - Phone normalization (caller_phone_norm, agent_phone_norm)
+    - Lead creation/matching by phone number
+    - Agent resolution from profiles table
+    - Call info appended to lead_info.call_info JSONB
+    """
+    event = await service.ingest_call_event(db, data.model_dump(exclude_unset=True))
+    await log_event(db, "call_event.ingested", current_user.id, "call_event", str(event.id), {
+        "event_type": event.event_type,
+        "call_uuid": event.call_uuid,
+    })
+    await db.commit()
+    return event
