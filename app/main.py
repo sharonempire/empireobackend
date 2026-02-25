@@ -66,7 +66,7 @@ from app.modules.intakes.router import router as intakes_router
 from app.modules.jobs.router import router as jobs_router
 from app.modules.call_events.router import router as call_events_router
 from app.modules.chat.router import router as chat_router
-from app.modules.payments.router import router as payments_router
+from app.modules.payments.router import router as payments_router, webhook_router as payments_webhook_router
 from app.modules.attendance.router import router as attendance_router
 from app.modules.ig_sessions.router import router as ig_sessions_router
 from app.modules.geography.router import router as geography_router
@@ -120,6 +120,9 @@ include_router_with_default(app, search_router, prefix=API_PREFIX, resource="sea
 include_router_with_default(app, utility_router, prefix=API_PREFIX, resource="utility")
 include_router_with_default(app, analytics_router, prefix=API_PREFIX, resource="analytics")
 include_router_with_default(app, ai_copilot_router, prefix=API_PREFIX, resource="ai_copilot")
+
+# Payments webhook router — no RBAC dependency (Razorpay verifies via HMAC signature)
+app.include_router(payments_webhook_router, prefix=API_PREFIX)
 
 # WebSocket router — no RBAC dependency (auth is handled via token in URL path)
 app.include_router(ws_router, prefix=API_PREFIX)
