@@ -2,8 +2,10 @@ from datetime import date, datetime, time
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
+
+# --------------- File Ingestion ---------------
 
 class FileIngestionOut(BaseModel):
     id: UUID
@@ -29,6 +31,20 @@ class FileIngestionOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class FileIngestionCreate(BaseModel):
+    file_name: str
+    file_key: str
+    file_size_bytes: Optional[int] = None
+    mime_type: Optional[str] = None
+    source_type: str = "upload"
+    entity_type: Optional[str] = None
+    entity_id: Optional[UUID] = None
+    employee_id: Optional[UUID] = None
+    tags: Optional[list[str]] = []
+
+
+# --------------- Call Analysis ---------------
 
 class CallAnalysisOut(BaseModel):
     id: UUID
@@ -61,6 +77,16 @@ class CallAnalysisOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class CallAnalysisCreate(BaseModel):
+    call_event_id: Optional[int] = None
+    call_uuid: Optional[str] = None
+    employee_id: Optional[UUID] = None
+    recording_url: Optional[str] = None
+    duration_seconds: Optional[int] = None
+
+
+# --------------- Employee Metric ---------------
 
 class EmployeeMetricOut(BaseModel):
     id: UUID
@@ -102,6 +128,8 @@ class EmployeeMetricOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# --------------- Performance Review ---------------
+
 class PerformanceReviewOut(BaseModel):
     id: UUID
     employee_id: UUID
@@ -129,6 +157,24 @@ class PerformanceReviewOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PerformanceReviewCreate(BaseModel):
+    employee_id: UUID
+    review_type: str = "monthly"
+    period_start: date
+    period_end: date
+    scores: Any = {}
+    overall_score: Optional[float] = None
+
+
+class PerformanceReviewUpdate(BaseModel):
+    scores: Optional[Any] = None
+    overall_score: Optional[float] = None
+    status: Optional[str] = None
+    employee_feedback: Optional[str] = None
+
+
+# --------------- Employee Goal ---------------
+
 class EmployeeGoalOut(BaseModel):
     id: UUID
     employee_id: UUID
@@ -152,6 +198,29 @@ class EmployeeGoalOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class EmployeeGoalCreate(BaseModel):
+    employee_id: UUID
+    title: str
+    description: Optional[str] = None
+    goal_type: str
+    target_value: float
+    unit: str = "count"
+    period_start: date
+    period_end: date
+    auto_track: bool = True
+    tracking_query: Any = None
+
+
+class EmployeeGoalUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    target_value: Optional[float] = None
+    current_value: Optional[float] = None
+    status: Optional[str] = None
+
+
+# --------------- Work Log ---------------
+
 class WorkLogOut(BaseModel):
     id: UUID
     employee_id: UUID
@@ -163,12 +232,26 @@ class WorkLogOut(BaseModel):
     ended_at: Optional[datetime] = None
     duration_minutes: Optional[float] = None
     source: str
-    metadata: Any = {}
+    metadata: Any = Field(default={}, validation_alias="meta")
     event_id: Optional[UUID] = None
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class WorkLogCreate(BaseModel):
+    employee_id: UUID
+    activity_type: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[UUID] = None
+    description: Optional[str] = None
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    duration_minutes: Optional[float] = None
+    source: str = "manual"
+
+
+# --------------- Employee Pattern ---------------
 
 class EmployeePatternOut(BaseModel):
     id: UUID
@@ -188,6 +271,8 @@ class EmployeePatternOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# --------------- Employee Schedule ---------------
 
 class EmployeeScheduleOut(BaseModel):
     id: UUID
@@ -212,6 +297,36 @@ class EmployeeScheduleOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class EmployeeScheduleCreate(BaseModel):
+    employee_id: UUID
+    schedule_type: str = "regular"
+    day_of_week: Optional[int] = None
+    specific_date: Optional[date] = None
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    break_minutes: int = 60
+    is_working_day: bool = True
+    leave_type: Optional[str] = None
+    leave_reason: Optional[str] = None
+    effective_from: date
+    effective_until: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class EmployeeScheduleUpdate(BaseModel):
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    break_minutes: Optional[int] = None
+    is_working_day: Optional[bool] = None
+    leave_type: Optional[str] = None
+    leave_reason: Optional[str] = None
+    status: Optional[str] = None
+    effective_until: Optional[date] = None
+    notes: Optional[str] = None
+
+
+# --------------- Training Record ---------------
+
 class TrainingRecordOut(BaseModel):
     id: UUID
     employee_id: UUID
@@ -227,8 +342,26 @@ class TrainingRecordOut(BaseModel):
     certificate_url: Optional[str] = None
     expiry_date: Optional[date] = None
     assigned_by: Optional[UUID] = None
-    metadata: Any = {}
+    metadata: Any = Field(default={}, validation_alias="meta")
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TrainingRecordCreate(BaseModel):
+    employee_id: UUID
+    title: str
+    training_type: str
+    description: Optional[str] = None
+    provider: Optional[str] = None
+    started_at: Optional[datetime] = None
+    expiry_date: Optional[date] = None
+
+
+class TrainingRecordUpdate(BaseModel):
+    status: Optional[str] = None
+    score: Optional[float] = None
+    max_score: Optional[float] = None
+    completed_at: Optional[datetime] = None
+    certificate_url: Optional[str] = None

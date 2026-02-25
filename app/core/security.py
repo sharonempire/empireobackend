@@ -1,20 +1,36 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+MAX_PASSWORD_BYTES = 1024
+
+
+def _prehash(password: str) -> str:
+    """SHA-256 pre-hash to bypass bcrypt's 72-byte input limit."""
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise ValueError("Password too long")
+    prehashed = _prehash(password).encode("utf-8")
+    return bcrypt.hashpw(prehashed, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    hashed_bytes = hashed.encode("utf-8")
+    # Try current scheme: SHA-256 pre-hash + bcrypt
+    if bcrypt.checkpw(_prehash(plain).encode("utf-8"), hashed_bytes):
+        return True
+    # Fallback: legacy direct bcrypt (passwords hashed before pre-hash migration)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed_bytes)
+    except ValueError:
+        return False
 
 
 def create_access_token(subject: str, extra: dict | None = None) -> str:

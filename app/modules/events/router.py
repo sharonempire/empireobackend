@@ -1,13 +1,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
-from app.modules.events.models import Event
+from app.modules.events import service
 from app.modules.events.schemas import EventOut
 from app.modules.users.models import User
 
@@ -24,20 +23,5 @@ async def api_list_events(
     current_user: User = Depends(require_perm("events", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Event)
-    count_stmt = select(func.count()).select_from(Event)
-
-    if entity_type:
-        stmt = stmt.where(Event.entity_type == entity_type)
-        count_stmt = count_stmt.where(Event.entity_type == entity_type)
-    if entity_id:
-        stmt = stmt.where(Event.entity_id == entity_id)
-        count_stmt = count_stmt.where(Event.entity_id == entity_id)
-    if event_type:
-        stmt = stmt.where(Event.event_type == event_type)
-        count_stmt = count_stmt.where(Event.event_type == event_type)
-
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Event.created_at.desc())
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+    items, total = await service.list_events(db, page, size, entity_type, entity_id, event_type)
+    return {**paginate_metadata(total, page, size), "items": items}

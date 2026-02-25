@@ -1,15 +1,14 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
-from app.modules.attendance.models import Attendance
-from app.modules.attendance.schemas import AttendanceOut
+from app.modules.attendance import service
+from app.modules.attendance.schemas import AttendanceCheckIn, AttendanceOut
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
@@ -25,23 +24,18 @@ async def api_list_attendance(
     current_user: User = Depends(require_perm("attendance", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Attendance)
-    count_stmt = select(func.count()).select_from(Attendance)
+    items, total = await service.list_attendance(db, page, size, employee_id, date, attendance_status)
+    return {**paginate_metadata(total, page, size), "items": items}
 
-    if employee_id:
-        stmt = stmt.where(Attendance.employee_id == employee_id)
-        count_stmt = count_stmt.where(Attendance.employee_id == employee_id)
-    if date:
-        stmt = stmt.where(Attendance.date == date)
-        count_stmt = count_stmt.where(Attendance.date == date)
-    if attendance_status:
-        stmt = stmt.where(Attendance.attendance_status == attendance_status)
-        count_stmt = count_stmt.where(Attendance.attendance_status == attendance_status)
 
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Attendance.created_at.desc())
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+@router.get("/today")
+async def api_today_present(
+    current_user: User = Depends(require_perm("attendance", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all employees who are present today."""
+    records = await service.get_today_present(db)
+    return {"present": [AttendanceOut.model_validate(r) for r in records]}
 
 
 @router.get("/{attendance_id}", response_model=AttendanceOut)
@@ -50,9 +44,39 @@ async def api_get_attendance(
     current_user: User = Depends(require_perm("attendance", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Attendance).where(Attendance.id == attendance_id)
-    result = await db.execute(stmt)
-    attendance = result.scalar_one_or_none()
-    if not attendance:
-        raise NotFoundError("Attendance record not found")
-    return attendance
+    return await service.get_attendance(db, attendance_id)
+
+
+@router.post("/check-in", response_model=AttendanceOut, status_code=201)
+async def api_check_in(
+    data: AttendanceCheckIn,
+    current_user: User = Depends(require_perm("attendance", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record employee check-in.
+
+    This triggers the DB function `assign_leads_on_checkin` which
+    automatically distributes unassigned (backlog) leads to present staff
+    via round-robin.
+    """
+    record = await service.check_in(db, data.employee_id, data.date)
+    await log_event(db, "attendance.check_in", current_user.id, "attendance", str(record.id), {
+        "employee_id": str(data.employee_id),
+    })
+    await db.commit()
+    return record
+
+
+@router.post("/{attendance_id}/check-out", response_model=AttendanceOut)
+async def api_check_out(
+    attendance_id: UUID,
+    current_user: User = Depends(require_perm("attendance", "update")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record employee check-out."""
+    record = await service.check_out(db, attendance_id)
+    await log_event(db, "attendance.check_out", current_user.id, "attendance", str(record.id), {
+        "employee_id": str(record.employee_id),
+    })
+    await db.commit()
+    return record

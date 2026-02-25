@@ -1,15 +1,13 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
-from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
-from app.modules.ai_artifacts.models import AiArtifact
+from app.modules.ai_artifacts import service
 from app.modules.ai_artifacts.schemas import AiArtifactCreate, AiArtifactOut
 from app.modules.users.models import User
 
@@ -26,23 +24,7 @@ async def api_list_ai_artifacts(
     current_user: User = Depends(require_perm("ai_artifacts", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(AiArtifact)
-    if artifact_type:
-        query = query.where(AiArtifact.artifact_type == artifact_type)
-    if entity_type:
-        query = query.where(AiArtifact.entity_type == entity_type)
-    if entity_id:
-        query = query.where(AiArtifact.entity_id == entity_id)
-    query = query.order_by(AiArtifact.created_at.desc())
-
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    offset = (page - 1) * size
-    result = await db.execute(query.offset(offset).limit(size))
-    items = result.scalars().all()
-
+    items, total = await service.list_ai_artifacts(db, page, size, artifact_type, entity_type, entity_id)
     return {**paginate_metadata(total, page, size), "items": items}
 
 
@@ -52,13 +34,7 @@ async def api_get_ai_artifact(
     current_user: User = Depends(require_perm("ai_artifacts", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(AiArtifact).where(AiArtifact.id == artifact_id)
-    )
-    artifact = result.scalar_one_or_none()
-    if not artifact:
-        raise NotFoundError("AI artifact not found")
-    return artifact
+    return await service.get_ai_artifact(db, artifact_id)
 
 
 @router.post("/", response_model=AiArtifactOut, status_code=201)
@@ -67,9 +43,7 @@ async def api_create_ai_artifact(
     current_user: User = Depends(require_perm("ai_artifacts", "create")),
     db: AsyncSession = Depends(get_db),
 ):
-    artifact = AiArtifact(**data.model_dump(), created_by=current_user.id)
-    db.add(artifact)
-    await db.flush()
+    artifact = await service.create_ai_artifact(db, data, current_user.id)
     await log_event(
         db=db,
         event_type="ai_artifact.created",

@@ -1,14 +1,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
-from app.modules.profiles.models import Profile
+from app.modules.profiles import service
 from app.modules.profiles.schemas import ProfileOut
 from app.modules.users.models import User
 
@@ -24,20 +22,17 @@ async def api_list_profiles(
     current_user: User = Depends(require_perm("profiles", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Profile)
-    count_stmt = select(func.count()).select_from(Profile)
+    items, total = await service.list_profiles(db, page, size, user_type, designation)
+    return {**paginate_metadata(total, page, size), "items": items}
 
-    if user_type:
-        stmt = stmt.where(Profile.user_type == user_type)
-        count_stmt = count_stmt.where(Profile.user_type == user_type)
-    if designation:
-        stmt = stmt.where(Profile.designation == designation)
-        count_stmt = count_stmt.where(Profile.designation == designation)
 
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Profile.diplay_name)
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+@router.get("/counselors")
+async def api_list_counselors(
+    current_user: User = Depends(require_perm("profiles", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List counselors with today's attendance status."""
+    return await service.list_counselors_with_attendance(db)
 
 
 @router.get("/{profile_id}", response_model=ProfileOut)
@@ -46,8 +41,16 @@ async def api_get_profile(
     current_user: User = Depends(require_perm("profiles", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Profile).where(Profile.id == profile_id))
-    profile = result.scalar_one_or_none()
-    if not profile:
-        raise NotFoundError("Profile not found")
-    return profile
+    """Get a profile (also serves as mentor endpoint)."""
+    return await service.get_profile(db, profile_id)
+
+
+@router.get("/{profile_id}/fcm-token")
+async def api_get_profile_fcm_token(
+    profile_id: UUID,
+    current_user: User = Depends(require_perm("profiles", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get just the FCM token for a profile (for push notifications)."""
+    token = await service.get_profile_fcm_token(db, profile_id)
+    return {"profile_id": str(profile_id), "fcm_token": token}

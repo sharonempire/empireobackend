@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -24,6 +24,7 @@ class Document(Base):
     verified_by = Column(UUID(as_uuid=True), ForeignKey("eb_users.id"), nullable=True)
     verified_at = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, nullable=True)
+    ai_extracted_data = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     uploader = relationship("User", foreign_keys=[uploaded_by], lazy="selectin")

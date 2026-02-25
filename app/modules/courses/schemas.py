@@ -118,3 +118,8 @@ class AppliedCourseOut(BaseModel):
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class AppliedCourseUpdate(BaseModel):
+    status: str | None = None
+    course_details: dict | None = None

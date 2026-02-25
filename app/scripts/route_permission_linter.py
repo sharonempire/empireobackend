@@ -1,60 +1,107 @@
-"""Simple route permission linter.
+"""Static route permission linter.
 
-This script imports the FastAPI app and inspects registered routes. It reports
-any route that does not include a permission check (heuristic) in its
-dependencies. It's a developer tool — run in your dev environment after
-including router defaults.
+This linter does not import the FastAPI app. Instead it scans `app/modules/*/router.py`
+files with AST to heuristically detect HTTP route handlers and whether they include
+an auth/permission dependency such as `require_perm(` or `get_current_user` in the
+function parameters or decorator arguments.
+
+It is intentionally conservative and reports possible missing protections for
+manual review. This avoids importing application code (useful when dependencies
+aren't installed or DB/Redis are not running).
 
 Usage:
-    python -m app.scripts.route_permission_linter
+    python3 -m app.scripts.route_permission_linter
 """
-from typing import List
-import inspect
+import ast
+import glob
+from pathlib import Path
 
 
-def _dep_qualname(dep) -> str:
-    try:
-        fn = getattr(dep, "call", None) or dep.dependency
-        if fn is None:
-            return ""
-        return getattr(fn, "__qualname__", getattr(fn, "__name__", ""))
-    except Exception:
-        return ""
+def inspect_router_file(path: Path) -> list[str]:
+    """Return list of route descriptions that look unprotected in the file."""
+    text = path.read_text()
+    tree = ast.parse(text, filename=str(path))
+
+    unprotected = []
+
+    # Find all function defs with decorators (likely route handlers)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            # Check decorators for @router.get/post/put/delete/... presence
+            has_route_decorator = False
+            for deco in node.decorator_list:
+                # decorator like router.get(...)
+                if isinstance(deco, ast.Call) and isinstance(deco.func, ast.Attribute):
+                    if getattr(deco.func.value, 'id', '') == 'router' or getattr(deco.func.value, 'attr', '') == 'router':
+                        has_route_decorator = True
+                elif isinstance(deco, ast.Attribute):
+                    if getattr(deco.value, 'id', '') == 'router' or getattr(deco.value, 'attr', '') == 'router':
+                        has_route_decorator = True
+
+            if not has_route_decorator:
+                continue
+
+            # Heuristic: check function arguments for Depends(require_perm or get_current_user)
+            protected = False
+            for arg in node.args.defaults + node.args.kw_defaults:
+                if arg is None:
+                    continue
+                src = ast.unparse(arg) if hasattr(ast, 'unparse') else ''
+                if 'require_perm' in src or 'get_current_user' in src or 'Depends(require_perm' in src:
+                    protected = True
+                    break
+
+            # Also check decorator keywords for dependencies
+            if not protected:
+                for deco in node.decorator_list:
+                    if isinstance(deco, ast.Call):
+                        for kw in deco.keywords:
+                            try:
+                                src = ast.unparse(kw.value) if hasattr(ast, 'unparse') else ''
+                            except Exception:
+                                src = ''
+                            if 'require_perm' in src or 'get_current_user' in src:
+                                protected = True
+                                break
+                        if protected:
+                            break
+
+            # Also check function body text for require_perm usage (loose heuristic)
+            if not protected:
+                body_src = ''.join(text.splitlines()[node.lineno - 1: node.end_lineno]) if hasattr(node, 'end_lineno') else ''
+                if 'require_perm(' in body_src or 'get_current_user' in body_src:
+                    protected = True
+
+            if not protected:
+                # Build a small signature for reporting
+                name = node.name
+                lineno = node.lineno
+                unprotected.append(f"{path.relative_to(Path.cwd())}:{lineno} {name}()")
+
+    return unprotected
 
 
 def main():
-    print("Loading app and inspecting routes...")
-    from app.main import app  # import the FastAPI app
+    base = Path('app') / 'modules'
+    pattern = str(base / '*' / 'router.py')
+    files = glob.glob(pattern)
+    all_unprotected = []
 
-    missing: List[str] = []
-
-    for route in app.routes:
-        # Only HTTP routes
-        if not hasattr(route, "methods"):
-            continue
-        # Gather dependency qualnames
-        deps = []
+    for f in files:
+        p = Path(f)
         try:
-            dependant = getattr(route, "dependant", None)
-            if dependant and hasattr(dependant, "dependencies"):
-                deps = [_dep_qualname(d) for d in dependant.dependencies]
-        except Exception:
-            deps = []
+            unprot = inspect_router_file(p)
+            all_unprotected.extend(unprot)
+        except SyntaxError as e:
+            print(f"Failed to parse {p}: {e}")
 
-        # Heuristic: look for require_perm or get_current_user in dependency qualnames
-        joined = " ".join(deps)
-        has_perm = "require_perm" in joined or "get_current_user" in joined or "checker" in joined
-
-        if not has_perm:
-            missing.append(f"{','.join(sorted(route.methods))} {route.path}")
-
-    if not missing:
-        print("All inspected routes have a permission or auth dependency (heuristic).")
+    if not all_unprotected:
+        print('No obvious unprotected routes found (heuristic).')
     else:
-        print("Routes missing explicit permission/auth check (heuristic):")
-        for r in missing:
-            print("  ", r)
+        print('Possible unprotected routes (manual review required):')
+        for u in all_unprotected:
+            print('  ', u)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

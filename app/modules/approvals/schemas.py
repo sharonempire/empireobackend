@@ -26,6 +26,21 @@ class ActionDraftOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ActionRunOut(BaseModel):
+    id: UUID
+    action_draft_id: UUID
+    action_type: str
+    status: str
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    result: dict | None = None
+    error: str | None = None
+    retry_count: int = 0
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ReviewRequest(BaseModel):
     action: str  # "approve" or "reject"
     rejection_reason: str | None = None

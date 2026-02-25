@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
-from app.modules.chat.models import ChatConversation, ChatMessage
-from app.modules.chat.schemas import ChatConversationOut, ChatMessageOut
+from app.modules.chat import service
+from app.modules.chat.schemas import ChatConversationOut, ChatMessageCreate, ChatMessageOut
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -22,20 +21,8 @@ async def api_list_conversations(
     current_user: User = Depends(require_perm("chat", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(ChatConversation)
-    count_stmt = select(func.count()).select_from(ChatConversation)
-
-    if counselor_id:
-        stmt = stmt.where(ChatConversation.counselor_id == counselor_id)
-        count_stmt = count_stmt.where(ChatConversation.counselor_id == counselor_id)
-    if lead_uuid:
-        stmt = stmt.where(ChatConversation.lead_uuid == lead_uuid)
-        count_stmt = count_stmt.where(ChatConversation.lead_uuid == lead_uuid)
-
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(ChatConversation.updated_at.desc())
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+    items, total = await service.list_conversations(db, page, size, counselor_id, lead_uuid)
+    return {**paginate_metadata(total, page, size), "items": items}
 
 
 @router.get("/conversations/{conversation_id}", response_model=ChatConversationOut)
@@ -44,11 +31,7 @@ async def api_get_conversation(
     current_user: User = Depends(require_perm("chat", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(ChatConversation).where(ChatConversation.id == conversation_id))
-    conversation = result.scalar_one_or_none()
-    if not conversation:
-        raise NotFoundError("Conversation not found")
-    return conversation
+    return await service.get_conversation(db, conversation_id)
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=PaginatedResponse[ChatMessageOut])
@@ -59,10 +42,48 @@ async def api_list_messages(
     current_user: User = Depends(require_perm("chat", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(ChatMessage).where(ChatMessage.conversation_id == conversation_id)
-    count_stmt = select(func.count()).select_from(ChatMessage).where(ChatMessage.conversation_id == conversation_id)
+    items, total = await service.list_messages(db, conversation_id, page, size)
+    return {**paginate_metadata(total, page, size), "items": items}
 
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(ChatMessage.created_at.asc())
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+
+@router.post("/conversations/{conversation_id}/messages", response_model=ChatMessageOut, status_code=201)
+async def api_send_message(
+    conversation_id: int,
+    data: ChatMessageCreate,
+    current_user: User = Depends(require_perm("chat", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a message. DB trigger auto-updates conversation metadata."""
+    msg_data = data.model_dump()
+    msg_data["conversation_id"] = conversation_id
+    msg = await service.send_message(db, msg_data)
+    await log_event(db, "chat.message_sent", current_user.id, "chat_message", str(msg.id), {
+        "conversation_id": conversation_id,
+    })
+    await db.commit()
+    return msg
+
+
+@router.post("/conversations/{conversation_id}/read")
+async def api_mark_read(
+    conversation_id: int,
+    current_user: User = Depends(require_perm("chat", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark all messages in a conversation as read."""
+    count = await service.mark_messages_read(db, conversation_id, str(current_user.id))
+    await db.commit()
+    return {"marked_read": count}
+
+
+@router.post("/conversations/get-or-create")
+async def api_get_or_create_conversation(
+    counselor_id: str,
+    lead_uuid: str,
+    current_user: User = Depends(require_perm("chat", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get or create a conversation between a counselor and a lead."""
+    result = await service.get_or_create_conversation(db, counselor_id, lead_uuid)
+    await db.commit()
+    return result

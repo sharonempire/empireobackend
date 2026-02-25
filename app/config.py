@@ -18,7 +18,15 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: list[str] = ["*"]
 
+    BOOTSTRAP_TOKEN: str = ""
+
     OPENAI_API_KEY: str = ""
+    SENDGRID_API_KEY: str = ""
+    GOOGLE_SERVICE_ACCOUNT_KEY: str = ""  # Path to SA JSON or inline JSON string
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+    RAZORPAY_WEBHOOK_SECRET: str = ""  # For webhook signature verification
+
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_S3_BUCKET: str = ""

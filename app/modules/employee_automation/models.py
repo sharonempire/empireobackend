@@ -166,7 +166,7 @@ class WorkLog(Base):
     ended_at = Column(DateTime(timezone=True), nullable=True)
     duration_minutes = Column(Float, nullable=True)
     source = Column(String, nullable=False, default="system")
-    metadata = Column(JSONB, default=dict)
+    meta = Column("metadata", JSONB, default=dict)
     event_id = Column(UUID(as_uuid=True), ForeignKey("eb_events.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -230,6 +230,6 @@ class TrainingRecord(Base):
     certificate_url = Column(Text, nullable=True)
     expiry_date = Column(Date, nullable=True)
     assigned_by = Column(UUID(as_uuid=True), ForeignKey("eb_users.id"), nullable=True)
-    metadata = Column(JSONB, default=dict)
+    meta = Column("metadata", JSONB, default=dict)
     created_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=True)

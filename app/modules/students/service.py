@@ -4,6 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
+from app.core.search_engine import hybrid_search
 from app.modules.students.models import Student
 from app.modules.students.schemas import StudentCreate, StudentUpdate
 
@@ -14,19 +15,29 @@ async def list_students(
     size: int = 20,
     counselor_id: UUID | None = None,
     search: str | None = None,
-) -> tuple[list[Student], int]:
+) -> tuple[list, int]:
+    # Use hybrid search when a search query is provided
+    if search:
+        filters: dict[str, str] = {}
+        if counselor_id:
+            filters["assigned_counselor_id"] = str(counselor_id)
+        return await hybrid_search(
+            db=db,
+            table_name="eb_students",
+            query=search,
+            search_columns=["full_name", "email", "phone"],
+            filters=filters or None,
+            page=page,
+            size=size,
+        )
+
+    # No search query — standard filtered list
     stmt = select(Student)
     count_stmt = select(func.count()).select_from(Student)
 
     if counselor_id:
         stmt = stmt.where(Student.assigned_counselor_id == counselor_id)
         count_stmt = count_stmt.where(Student.assigned_counselor_id == counselor_id)
-
-    if search:
-        pattern = f"%{search}%"
-        condition = or_(Student.full_name.ilike(pattern), Student.email.ilike(pattern), Student.phone.ilike(pattern))
-        stmt = stmt.where(condition)
-        count_stmt = count_stmt.where(condition)
 
     total = (await db.execute(count_stmt)).scalar()
     stmt = stmt.offset((page - 1) * size).limit(size).order_by(Student.created_at.desc())
