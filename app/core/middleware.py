@@ -1,13 +1,34 @@
-"""FastAPI middleware for request tracing and structured logging."""
+"""FastAPI middleware for request tracing, body size limits, and structured logging."""
 import logging
 import time
 import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger("empireo.request")
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject requests whose Content-Length exceeds max_body_size bytes."""
+
+    def __init__(self, app, max_body_size: int = 10 * 1024 * 1024):
+        super().__init__(app)
+        self.max_body_size = max_body_size
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > self.max_body_size:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "error": True,
+                    "status_code": 413,
+                    "detail": f"Request body too large (max {self.max_body_size // (1024 * 1024)} MB)",
+                },
+            )
+        return await call_next(request)
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):

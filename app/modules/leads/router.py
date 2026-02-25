@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import cast, func, or_, select, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
-from app.modules.leads.models import Lead, LeadInfo
+from app.modules.leads import service
 from app.modules.leads.schemas import LeadDetailOut, LeadInfoOut, LeadOut
 from app.modules.users.models import User
 
@@ -25,36 +23,8 @@ async def api_list_leads(
     current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Lead)
-    count_stmt = select(func.count()).select_from(Lead)
-
-    if search:
-        pattern = f"%{search}%"
-        condition = or_(
-            Lead.name.ilike(pattern),
-            Lead.email.ilike(pattern),
-            Lead.phone_norm.ilike(pattern),
-        )
-        stmt = stmt.where(condition)
-        count_stmt = count_stmt.where(condition)
-
-    if status:
-        stmt = stmt.where(Lead.status == status)
-        count_stmt = count_stmt.where(Lead.status == status)
-    if heat_status:
-        stmt = stmt.where(Lead.heat_status == heat_status)
-        count_stmt = count_stmt.where(Lead.heat_status == heat_status)
-    if lead_tab:
-        stmt = stmt.where(Lead.lead_tab == lead_tab)
-        count_stmt = count_stmt.where(Lead.lead_tab == lead_tab)
-    if assigned_to:
-        stmt = stmt.where(Lead.assigned_to == assigned_to)
-        count_stmt = count_stmt.where(Lead.assigned_to == assigned_to)
-
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Lead.id.desc())
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+    items, total = await service.list_leads(db, page, size, search, status, heat_status, lead_tab, assigned_to)
+    return {**paginate_metadata(total, page, size), "items": items}
 
 
 @router.get("/{lead_id}", response_model=LeadDetailOut)
@@ -63,16 +33,9 @@ async def api_get_lead(
     current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Lead).where(Lead.id == lead_id))
-    lead = result.scalar_one_or_none()
-    if not lead:
-        raise NotFoundError("Lead not found")
+    lead = await service.get_lead(db, lead_id)
+    lead_info = await service.get_lead_info(db, lead_id)
 
-    # LeadInfo PK = leadslist.id
-    info_result = await db.execute(select(LeadInfo).where(LeadInfo.id == lead_id))
-    lead_info = info_result.scalar_one_or_none()
-
-    # Build response from ORM objects
     lead_data = LeadOut.model_validate(lead).model_dump()
     lead_data["lead_info"] = LeadInfoOut.model_validate(lead_info) if lead_info else None
     return LeadDetailOut(**lead_data)

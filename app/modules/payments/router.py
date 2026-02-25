@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
-from app.modules.payments.models import Payment
+from app.modules.payments import service
 from app.modules.payments.schemas import PaymentOut
 from app.modules.users.models import User
 
@@ -21,17 +19,8 @@ async def api_list_payments(
     current_user: User = Depends(require_perm("payments", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Payment)
-    count_stmt = select(func.count()).select_from(Payment)
-
-    if status:
-        stmt = stmt.where(Payment.status == status)
-        count_stmt = count_stmt.where(Payment.status == status)
-
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Payment.id.desc())
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+    items, total = await service.list_payments(db, page, size, status)
+    return {**paginate_metadata(total, page, size), "items": items}
 
 
 @router.get("/{payment_id}", response_model=PaymentOut)
@@ -40,8 +29,4 @@ async def api_get_payment(
     current_user: User = Depends(require_perm("payments", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Payment).where(Payment.id == payment_id))
-    payment = result.scalar_one_or_none()
-    if not payment:
-        raise NotFoundError("Payment not found")
-    return payment
+    return await service.get_payment(db, payment_id)

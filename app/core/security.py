@@ -22,8 +22,15 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    prehashed = _prehash(plain).encode("utf-8")
-    return bcrypt.checkpw(prehashed, hashed.encode("utf-8"))
+    hashed_bytes = hashed.encode("utf-8")
+    # Try current scheme: SHA-256 pre-hash + bcrypt
+    if bcrypt.checkpw(_prehash(plain).encode("utf-8"), hashed_bytes):
+        return True
+    # Fallback: legacy direct bcrypt (passwords hashed before pre-hash migration)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed_bytes)
+    except ValueError:
+        return False
 
 
 def create_access_token(subject: str, extra: dict | None = None) -> str:

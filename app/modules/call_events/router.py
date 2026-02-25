@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
-from app.modules.call_events.models import CallEvent
+from app.modules.call_events import service
 from app.modules.call_events.schemas import CallEventOut
 from app.modules.users.models import User
 
@@ -24,26 +22,8 @@ async def api_list_call_events(
     current_user: User = Depends(require_perm("call_events", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(CallEvent)
-    count_stmt = select(func.count()).select_from(CallEvent)
-
-    if event_type:
-        stmt = stmt.where(CallEvent.event_type == event_type)
-        count_stmt = count_stmt.where(CallEvent.event_type == event_type)
-    if call_uuid:
-        stmt = stmt.where(CallEvent.call_uuid == call_uuid)
-        count_stmt = count_stmt.where(CallEvent.call_uuid == call_uuid)
-    if agent_number:
-        stmt = stmt.where(CallEvent.agent_number == agent_number)
-        count_stmt = count_stmt.where(CallEvent.agent_number == agent_number)
-    if call_date:
-        stmt = stmt.where(CallEvent.call_date == call_date)
-        count_stmt = count_stmt.where(CallEvent.call_date == call_date)
-
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(CallEvent.id.desc())
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+    items, total = await service.list_call_events(db, page, size, event_type, call_uuid, agent_number, call_date)
+    return {**paginate_metadata(total, page, size), "items": items}
 
 
 @router.get("/{call_event_id}", response_model=CallEventOut)
@@ -52,8 +32,4 @@ async def api_get_call_event(
     current_user: User = Depends(require_perm("call_events", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(CallEvent).where(CallEvent.id == call_event_id))
-    call_event = result.scalar_one_or_none()
-    if not call_event:
-        raise NotFoundError("Call event not found")
-    return call_event
+    return await service.get_call_event(db, call_event_id)

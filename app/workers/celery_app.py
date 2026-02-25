@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import settings
 
@@ -9,5 +10,23 @@ celery.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    beat_schedule={
+        "cleanup-expired-tokens-daily": {
+            "task": "cleanup_expired_tokens",
+            "schedule": crontab(hour=3, minute=0),  # 3 AM UTC daily
+        },
+        "process-pending-transcriptions-hourly": {
+            "task": "transcribe_call_batch",
+            "schedule": crontab(minute=0),  # Every hour at :00
+        },
+        "compute-daily-employee-metrics": {
+            "task": "compute_all_employee_metrics",
+            "schedule": crontab(hour=6, minute=0),  # 6 AM UTC daily
+        },
+        "process-file-ingestion-queue-hourly": {
+            "task": "process_file_ingestion_batch",
+            "schedule": crontab(minute=0),  # Every hour at :00
+        },
+    },
 )
 celery.autodiscover_tasks(["app.workers"])

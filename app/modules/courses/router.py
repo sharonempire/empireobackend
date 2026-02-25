@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
-from app.modules.courses.models import Course
+from app.modules.courses import service
 from app.modules.courses.schemas import CourseOut
 from app.modules.users.models import User
 
@@ -22,20 +20,8 @@ async def api_list_courses(
     current_user: User = Depends(require_perm("courses", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Course)
-    count_stmt = select(func.count()).select_from(Course)
-
-    if country:
-        stmt = stmt.where(Course.country == country)
-        count_stmt = count_stmt.where(Course.country == country)
-    if program_level:
-        stmt = stmt.where(Course.program_level == program_level)
-        count_stmt = count_stmt.where(Course.program_level == program_level)
-
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Course.program_name)
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+    items, total = await service.list_courses(db, page, size, country, program_level)
+    return {**paginate_metadata(total, page, size), "items": items}
 
 
 @router.get("/search", response_model=PaginatedResponse[CourseOut])
@@ -46,16 +32,8 @@ async def api_search_courses(
     current_user: User = Depends(require_perm("courses", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    pattern = f"%{q}%"
-    condition = or_(Course.program_name.ilike(pattern), Course.university.ilike(pattern), Course.country.ilike(pattern))
-
-    stmt = select(Course).where(condition)
-    count_stmt = select(func.count()).select_from(Course).where(condition)
-
-    total = (await db.execute(count_stmt)).scalar()
-    stmt = stmt.offset((page - 1) * size).limit(size).order_by(Course.program_name)
-    result = await db.execute(stmt)
-    return {**paginate_metadata(total, page, size), "items": result.scalars().all()}
+    items, total = await service.search_courses(db, q, page, size)
+    return {**paginate_metadata(total, page, size), "items": items}
 
 
 @router.get("/{course_id}", response_model=CourseOut)
@@ -64,8 +42,4 @@ async def api_get_course(
     current_user: User = Depends(require_perm("courses", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Course).where(Course.id == course_id))
-    course = result.scalar_one_or_none()
-    if not course:
-        raise NotFoundError("Course not found")
-    return course
+    return await service.get_course(db, course_id)

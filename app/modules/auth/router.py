@@ -8,6 +8,7 @@ from app.config import settings
 from app.database import get_db
 from app.modules.auth import service as auth_service
 from app.modules.auth.schemas import (
+    AdminResetPasswordRequest,
     BootstrapRequest,
     ChangePasswordRequest,
     LoginRequest,
@@ -175,3 +176,40 @@ async def bootstrap(
     await db.commit()
 
     return {"ok": True, "user_id": str(user.id), "email": user.email, "role": data.role}
+
+
+@router.post("/reset-password", response_model=None)
+async def admin_reset_password(
+    data: AdminResetPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    x_bootstrap_token: str = Header(alias="X-Bootstrap-Token"),
+):
+    """Admin password reset guarded by BOOTSTRAP_TOKEN. Use this to recover
+    access when you cannot log in (e.g. after a hashing scheme migration)."""
+
+    if not settings.BOOTSTRAP_TOKEN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bootstrap not configured")
+
+    if not secrets.compare_digest(x_bootstrap_token, settings.BOOTSTRAP_TOKEN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid bootstrap token")
+
+    user = (await db.execute(select(User).where(User.email == data.email))).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.hashed_password = hash_password(data.new_password)
+    await db.flush()
+
+    ip = request.client.host if request.client else "unknown"
+    await log_event(
+        db,
+        "auth.admin_reset_password",
+        actor_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        metadata={"email": data.email, "ip": ip},
+    )
+    await db.commit()
+
+    return {"ok": True, "email": user.email}

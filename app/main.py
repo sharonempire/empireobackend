@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -8,8 +9,8 @@ from sqlalchemy import text
 from app.config import settings
 from app.database import engine
 from app.core.logging_config import setup_logging
-from app.core.middleware import RequestIdMiddleware
-from app.core.exceptions import http_exception_handler, unhandled_exception_handler
+from app.core.middleware import RequestIdMiddleware, BodySizeLimitMiddleware
+from app.core.exceptions import http_exception_handler, unhandled_exception_handler, validation_exception_handler
 
 
 @asynccontextmanager
@@ -38,8 +39,12 @@ app.add_middleware(
 # Request tracing
 app.add_middleware(RequestIdMiddleware)
 
+# Reject bodies larger than 10 MB
+app.add_middleware(BodySizeLimitMiddleware, max_body_size=10 * 1024 * 1024)
+
 # Global error handlers
 app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Mount all routers
@@ -67,6 +72,15 @@ from app.modules.ig_sessions.router import router as ig_sessions_router
 from app.modules.geography.router import router as geography_router
 from app.modules.ai_artifacts.router import router as ai_artifacts_router
 from app.modules.policies.router import router as policies_router
+from app.modules.employee_automation.router import router as employee_automation_router
+from app.modules.freelance.router import router as freelance_router
+from app.modules.push_tokens.router import router as push_tokens_router
+from app.modules.saved_items.router import router as saved_items_router
+from app.modules.search.router import router as search_router
+from app.modules.utility.router import router as utility_router
+from app.modules.analytics.router import router as analytics_router
+from app.modules.ai_copilot.router import router as ai_copilot_router
+from app.modules.ws.router import router as ws_router
 from app.core.rbac import include_router_with_default
 
 API_PREFIX = "/api/v1"
@@ -98,6 +112,17 @@ include_router_with_default(app, ig_sessions_router, prefix=API_PREFIX, resource
 include_router_with_default(app, geography_router, prefix=API_PREFIX, resource="geography")
 include_router_with_default(app, ai_artifacts_router, prefix=API_PREFIX, resource="ai_artifacts")
 include_router_with_default(app, policies_router, prefix=API_PREFIX, resource="policies")
+include_router_with_default(app, employee_automation_router, prefix=API_PREFIX, resource="employee_automation")
+include_router_with_default(app, freelance_router, prefix=API_PREFIX, resource="freelance")
+include_router_with_default(app, push_tokens_router, prefix=API_PREFIX, resource="push_tokens")
+include_router_with_default(app, saved_items_router, prefix=API_PREFIX, resource="saved_items")
+include_router_with_default(app, search_router, prefix=API_PREFIX, resource="search")
+include_router_with_default(app, utility_router, prefix=API_PREFIX, resource="utility")
+include_router_with_default(app, analytics_router, prefix=API_PREFIX, resource="analytics")
+include_router_with_default(app, ai_copilot_router, prefix=API_PREFIX, resource="ai_copilot")
+
+# WebSocket router — no RBAC dependency (auth is handled via token in URL path)
+app.include_router(ws_router, prefix=API_PREFIX)
 
 
 @app.get("/health")

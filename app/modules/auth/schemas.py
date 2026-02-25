@@ -26,3 +26,8 @@ class BootstrapRequest(BaseModel):
     password: str
     full_name: str
     role: str = "admin"
+
+
+class AdminResetPasswordRequest(BaseModel):
+    email: EmailStr
+    new_password: str

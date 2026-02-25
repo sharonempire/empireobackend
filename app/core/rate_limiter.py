@@ -1,10 +1,11 @@
-"""Simple Redis-backed rate limiter for critical auth endpoints.
+"""Redis-backed rate limiter for auth and write endpoints.
 
-This provides a small helper to increment a key with TTL and enforce a limit.
-It is intentionally minimal: it uses Redis INCR and EXPIRE. For robust production
-use a proxy rate limiter (e.g., nginx, cloud provider) or a dedicated library.
+Provides a low-level `limit_key` helper plus a FastAPI dependency factory
+`rate_limit(limit, period)` that can be injected into any endpoint.
 """
 from typing import Optional
+
+from fastapi import HTTPException, Request
 import redis.asyncio as aioredis
 
 from app.config import settings
@@ -25,3 +26,30 @@ async def limit_key(key: str, limit: int, period_seconds: int) -> Optional[int]:
         return remaining
     except Exception:
         return None
+
+
+def rate_limit(limit: int = 30, period_seconds: int = 60):
+    """FastAPI dependency factory for per-user rate limiting on write endpoints.
+
+    Usage:
+        @router.post("/", dependencies=[Depends(rate_limit(limit=10, period_seconds=60))])
+        async def create_thing(...): ...
+    """
+
+    async def _check(request: Request):
+        # Prefer user ID if authenticated, fall back to IP
+        user_id = getattr(request.state, "user_id", None)
+        if user_id:
+            key = f"rate:write:{user_id}:{request.url.path}"
+        else:
+            ip = request.client.host if request.client else "unknown"
+            key = f"rate:write:{ip}:{request.url.path}"
+
+        remaining = await limit_key(key, limit, period_seconds)
+        if remaining is not None and remaining <= 0:
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Please try again later.",
+            )
+
+    return _check

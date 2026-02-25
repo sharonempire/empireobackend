@@ -7,8 +7,8 @@ from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import get_current_user, require_perm
-from app.modules.approvals.schemas import ActionDraftOut, ReviewRequest
-from app.modules.approvals.service import get_draft, list_drafts, review_draft
+from app.modules.approvals.schemas import ActionDraftOut, ActionRunOut, ReviewRequest
+from app.modules.approvals.service import execute_draft, get_draft, list_drafts, review_draft
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
@@ -49,3 +49,19 @@ async def api_review_draft(
     )
     await db.commit()
     return draft
+
+
+@router.post("/{draft_id}/execute", response_model=ActionRunOut)
+async def api_execute_draft(
+    draft_id: UUID,
+    current_user: User = Depends(require_perm("approvals", "update")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Execute an approved action draft and return the execution result."""
+    run = await execute_draft(db, draft_id, current_user.id)
+    await log_event(
+        db, "approval.executed", current_user.id, "action_draft", draft_id,
+        {"action_type": run.action_type, "run_status": run.status},
+    )
+    await db.commit()
+    return run
