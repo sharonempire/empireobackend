@@ -1,11 +1,13 @@
 """Courses service layer with hybrid search."""
 
+from datetime import datetime, timezone
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
 from app.core.search_engine import hybrid_search
-from app.modules.courses.models import Course
+from app.modules.courses.models import AppliedCourse, Course
 
 
 async def list_courses(
@@ -93,3 +95,44 @@ async def search_eligible_courses(
     rows = [dict(row._mapping) for row in result.all()]
 
     return rows, total
+
+
+# ── Applied Courses ──────────────────────────────────────────────────
+
+
+async def list_applied_courses_for_lead(
+    db: AsyncSession,
+    lead_id: int,
+    page: int = 1,
+    size: int = 50,
+) -> tuple[list[AppliedCourse], int]:
+    """Fetch courses applied by a lead. user_id in applied_courses is the lead id (as text)."""
+    lead_id_str = str(lead_id)
+    stmt = select(AppliedCourse).where(AppliedCourse.user_id == lead_id_str)
+    count_stmt = select(func.count()).select_from(AppliedCourse).where(AppliedCourse.user_id == lead_id_str)
+
+    total = (await db.execute(count_stmt)).scalar()
+    stmt = stmt.order_by(AppliedCourse.created_at.desc()).offset((page - 1) * size).limit(size)
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
+
+
+async def get_applied_course(db: AsyncSession, applied_id: str) -> AppliedCourse:
+    result = await db.execute(select(AppliedCourse).where(AppliedCourse.id == applied_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise NotFoundError("Applied course not found")
+    return item
+
+
+async def update_applied_course(
+    db: AsyncSession, applied_id: str, data: dict
+) -> AppliedCourse:
+    item = await get_applied_course(db, applied_id)
+    for key, value in data.items():
+        if value is not None:
+            setattr(item, key, value)
+    item.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    await db.refresh(item)
+    return item

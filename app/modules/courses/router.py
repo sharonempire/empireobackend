@@ -5,7 +5,8 @@ from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
 from app.modules.courses import service
-from app.modules.courses.schemas import CourseOut
+from app.core.events import log_event
+from app.modules.courses.schemas import AppliedCourseOut, AppliedCourseUpdate, CourseOut
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
@@ -62,3 +63,20 @@ async def api_get_course(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_course(db, course_id)
+
+
+# ── Applied Courses ──────────────────────────────────────────────────
+
+
+@router.patch("/applied/{applied_id}", response_model=AppliedCourseOut)
+async def api_update_applied_course(
+    applied_id: str,
+    data: AppliedCourseUpdate,
+    current_user: User = Depends(require_perm("courses", "update")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a course application (status, course_details)."""
+    item = await service.update_applied_course(db, applied_id, data.model_dump(exclude_unset=True))
+    await log_event(db, "applied_course.updated", current_user.id, "applied_course", applied_id, data.model_dump(exclude_unset=True))
+    await db.commit()
+    return item

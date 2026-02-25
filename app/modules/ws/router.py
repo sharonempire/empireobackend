@@ -1,4 +1,14 @@
-"""WebSocket endpoint for real-time notifications."""
+"""WebSocket endpoint for real-time notifications and table change events.
+
+Clients can subscribe to channels to receive table change events:
+  - "leads" → leadslist INSERT/UPDATE/DELETE
+  - "call_events" → call_events INSERT/UPDATE/DELETE
+  - "lead_info" → lead_info UPDATE
+  - "applied_courses" → applied_courses INSERT
+
+Subscribe message: {"type": "subscribe", "channel": "leads"}
+Unsubscribe message: {"type": "unsubscribe", "channel": "leads"}
+"""
 
 import logging
 
@@ -11,19 +21,18 @@ logger = logging.getLogger("empireo.ws")
 
 router = APIRouter()
 
+VALID_CHANNELS = {"leads", "call_events", "lead_info", "applied_courses"}
+
 
 @router.websocket("/ws/{token}")
 async def websocket_endpoint(websocket: WebSocket, token: str) -> None:
     """WebSocket endpoint authenticated via JWT token in the URL path.
 
-    The client connects to /ws/<jwt_token>. The server decodes the token
-    to identify the user. If invalid, the connection is closed with code 4001.
-
-    Once connected, the server keeps the connection alive. The client can
-    send JSON messages; the server handles "ping" by responding with "pong".
-    Real-time notifications are pushed to the client via the ConnectionManager.
+    Supported client messages:
+      - {"type": "ping"} → responds with {"type": "pong"}
+      - {"type": "subscribe", "channel": "leads"} → subscribe to table changes
+      - {"type": "unsubscribe", "channel": "leads"} → unsubscribe
     """
-    # Validate JWT token
     payload = decode_token(token)
     if payload is None:
         await websocket.close(code=4001, reason="Invalid or expired token")
@@ -39,20 +48,30 @@ async def websocket_endpoint(websocket: WebSocket, token: str) -> None:
         await websocket.close(code=4001, reason="Invalid token payload")
         return
 
-    # Accept and register the connection
     await manager.connect(websocket, user_id)
 
     try:
         while True:
-            # Wait for incoming messages from the client
             data = await websocket.receive_json()
-
-            # Handle ping/pong keep-alive
             msg_type = data.get("type", "")
+
             if msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
+
+            elif msg_type == "subscribe":
+                channel = data.get("channel", "")
+                if channel in VALID_CHANNELS:
+                    manager.subscribe(user_id, channel)
+                    await websocket.send_json({"type": "subscribed", "channel": channel})
+                else:
+                    await websocket.send_json({"type": "error", "message": f"Invalid channel: {channel}"})
+
+            elif msg_type == "unsubscribe":
+                channel = data.get("channel", "")
+                manager.unsubscribe(user_id, channel)
+                await websocket.send_json({"type": "unsubscribed", "channel": channel})
+
             else:
-                # Echo back unrecognized messages with an ack
                 await websocket.send_json({"type": "ack", "received": msg_type})
 
     except WebSocketDisconnect:

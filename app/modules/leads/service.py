@@ -23,10 +23,10 @@ from uuid import UUID
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.core.search_engine import hybrid_search
 from app.modules.leads.models import Lead, LeadAssignmentTracker, LeadInfo
-from app.modules.leads.schemas import LeadCreate, LeadInfoUpdate, LeadUpdate
+from app.modules.leads.schemas import LeadCreate, LeadInfoCreate, LeadInfoUpdate, LeadUpdate
 
 
 # ── List / Search ────────────────────────────────────────────────────
@@ -140,6 +140,30 @@ async def update_lead_info(
         raise NotFoundError("Lead info not found")
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(info, key, value)
+    await db.flush()
+    await db.refresh(info)
+    return info
+
+
+# ── Create Lead Info ─────────────────────────────────────────────────
+
+
+async def create_lead_info(
+    db: AsyncSession, lead_id: int, data: LeadInfoCreate
+) -> LeadInfo:
+    """Create a lead_info record for a lead.
+    Note: DB trigger ensure_lead_info_row normally auto-creates this on lead INSERT.
+    This endpoint is for cases where it needs to be created/replaced manually.
+    """
+    existing = await get_lead_info(db, lead_id)
+    if existing:
+        raise ConflictError(f"Lead info already exists for lead {lead_id}")
+
+    # Verify the lead exists
+    await get_lead(db, lead_id)
+
+    info = LeadInfo(id=lead_id, **data.model_dump(exclude_unset=True))
+    db.add(info)
     await db.flush()
     await db.refresh(info)
     return info
@@ -313,3 +337,200 @@ async def get_lead_stats(db: AsyncSession) -> dict:
         "by_heat_status": by_heat,
         "by_status": by_status,
     }
+
+
+# ── Follow-Up / Date-Filtered Views ─────────────────────────────────
+
+
+async def list_follow_up_leads(
+    db: AsyncSession,
+    page: int = 1,
+    size: int = 20,
+    assigned_to: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    lead_tab: str | None = None,
+) -> tuple[list[Lead], int]:
+    """Leads with follow_up date in range, excluding 100% completed."""
+    from sqlalchemy import and_, cast, String
+
+    conditions = [Lead.date.isnot(None)]
+
+    if assigned_to:
+        conditions.append(Lead.assigned_to == assigned_to)
+    if start:
+        conditions.append(Lead.date >= start)
+    if end:
+        conditions.append(Lead.date <= end)
+    if lead_tab:
+        conditions.append(Lead.lead_tab == lead_tab)
+
+    # Exclude leads where info_progress indicates 100% complete
+    # info_progress is TEXT — may contain JSON like {"percentage": 100}
+    conditions.append(
+        func.coalesce(Lead.info_progress, "").op("NOT LIKE")("%100%")
+    )
+
+    where = and_(*conditions)
+    count_stmt = select(func.count()).select_from(Lead).where(where)
+    total = (await db.execute(count_stmt)).scalar()
+
+    stmt = (
+        select(Lead)
+        .where(where)
+        .order_by(Lead.date.asc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
+
+
+async def list_new_enquiry_leads(
+    db: AsyncSession,
+    page: int = 1,
+    size: int = 20,
+    assigned_to: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    lead_tab: str | None = None,
+) -> tuple[list[Lead], int]:
+    """Leads created in date range for a specific assignee."""
+    from sqlalchemy import and_
+
+    conditions = []
+
+    if assigned_to:
+        conditions.append(Lead.assigned_to == assigned_to)
+    if start:
+        conditions.append(Lead.created_at >= start)
+    if end:
+        conditions.append(Lead.created_at <= end)
+    if lead_tab:
+        conditions.append(Lead.lead_tab == lead_tab)
+
+    where = and_(*conditions) if conditions else True
+    count_stmt = select(func.count()).select_from(Lead).where(where)
+    total = (await db.execute(count_stmt)).scalar()
+
+    stmt = (
+        select(Lead)
+        .where(where)
+        .order_by(Lead.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
+
+
+async def list_draft_leads(
+    db: AsyncSession,
+    page: int = 1,
+    size: int = 50,
+) -> tuple[list[Lead], int]:
+    """Leads with draft_status in (draft, DRAFT)."""
+    condition = func.lower(Lead.draft_status) == "draft"
+    count_stmt = select(func.count()).select_from(Lead).where(condition)
+    total = (await db.execute(count_stmt)).scalar()
+
+    stmt = (
+        select(Lead)
+        .where(condition)
+        .order_by(Lead.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
+
+
+async def list_completed_leads(
+    db: AsyncSession,
+    page: int = 1,
+    size: int = 20,
+    assigned_to: str | None = None,
+    lead_tab: str | None = None,
+) -> tuple[list[Lead], int]:
+    """Leads with info_progress percentage = 100."""
+    from sqlalchemy import and_
+
+    conditions = [Lead.info_progress.ilike("%100%")]
+
+    if assigned_to:
+        conditions.append(Lead.assigned_to == assigned_to)
+    if lead_tab:
+        conditions.append(Lead.lead_tab == lead_tab)
+
+    where = and_(*conditions)
+    count_stmt = select(func.count()).select_from(Lead).where(where)
+    total = (await db.execute(count_stmt)).scalar()
+
+    stmt = (
+        select(Lead)
+        .where(where)
+        .order_by(Lead.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
+
+
+async def list_study_abroad_leads(
+    db: AsyncSession,
+    page: int = 1,
+    size: int = 50,
+    lead_tab: str | None = "student",
+) -> tuple[list[Lead], int]:
+    """Study abroad leads — excludes trashed statuses and bad lead types."""
+    from sqlalchemy import and_, or_
+
+    trashed_statuses = ["lead trashed", "office enquiry"]
+    conditions = [
+        ~func.lower(func.coalesce(Lead.status, "")).in_(trashed_statuses),
+        ~func.lower(func.coalesce(Lead.lead_type, "")).in_(["office enquiry"]),
+    ]
+
+    if lead_tab:
+        conditions.append(Lead.lead_tab == lead_tab)
+
+    where = and_(*conditions)
+    count_stmt = select(func.count()).select_from(Lead).where(where)
+    total = (await db.execute(count_stmt)).scalar()
+
+    stmt = (
+        select(Lead)
+        .where(where)
+        .order_by(Lead.fresh.desc(), Lead.date.asc(), Lead.created_at.asc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
+
+
+async def count_leads(
+    db: AsyncSession,
+    assigned_to: str | None = None,
+    lead_tab: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+) -> int:
+    """Count matching leads (for dashboard counters)."""
+    from sqlalchemy import and_
+
+    conditions = []
+
+    if assigned_to:
+        conditions.append(Lead.assigned_to == assigned_to)
+    if lead_tab:
+        conditions.append(Lead.lead_tab == lead_tab)
+    if start:
+        conditions.append(Lead.created_at >= start)
+    if end:
+        conditions.append(Lead.created_at <= end)
+
+    where = and_(*conditions) if conditions else True
+    count_stmt = select(func.count()).select_from(Lead).where(where)
+    return (await db.execute(count_stmt)).scalar()

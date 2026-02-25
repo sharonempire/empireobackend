@@ -18,3 +18,11 @@ class NotificationOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class NotificationSend(BaseModel):
+    """Send an in-app notification + FCM push to a user."""
+    recipient_id: UUID
+    title: str
+    body: str
+    data: dict | None = None

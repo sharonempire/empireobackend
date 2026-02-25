@@ -83,3 +83,22 @@ async def get_call_stats(db: AsyncSession, employee_id: str | None = None) -> di
     if not row:
         return {"total": 0, "connected": 0, "avg_duration": 0, "with_recording": 0}
     return dict(row._mapping)
+
+
+async def ingest_cdr(db: AsyncSession, data: dict) -> CallEvent:
+    """Ingest a CDR (Call Detail Record) — maps CDR fields to call_event columns."""
+    event_data = {
+        "event_type": "cdr",
+        "extension": data.get("extension"),
+        "destination": data.get("destination"),
+        "callerid": data.get("callerid"),
+        "total_duration": data.get("duration_seconds"),
+        "call_status": data.get("status"),
+        "call_date": data.get("datetime"),
+        "recording_url": data.get("recording_url"),
+    }
+    event = CallEvent(**{k: v for k, v in event_data.items() if v is not None})
+    db.add(event)
+    await db.flush()
+    await db.refresh(event)
+    return event

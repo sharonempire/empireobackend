@@ -3,10 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
+from app.core.websocket import broadcast_table_change
 from app.database import get_db
 from app.dependencies import require_perm
 from app.modules.call_events import service
-from app.modules.call_events.schemas import CallEventCreate, CallEventOut
+from app.modules.call_events.schemas import CallEventCreate, CallEventOut, CDRCreate, ClickToCallRequest
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/call-events", tags=["Call Events"])
@@ -66,4 +67,51 @@ async def api_ingest_call_event(
         "call_uuid": event.call_uuid,
     })
     await db.commit()
+    await broadcast_table_change("call_events", "INSERT", event.id, {"event_type": event.event_type})
     return event
+
+
+@router.post("/cdr", response_model=CallEventOut, status_code=201)
+async def api_ingest_cdr(
+    data: CDRCreate,
+    current_user: User = Depends(require_perm("call_events", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Push a CDR (Call Detail Record) from the telephony system.
+    Maps CDR fields to call_event columns and inserts a record.
+    """
+    event = await service.ingest_cdr(db, data.model_dump(exclude_unset=True))
+    await log_event(db, "call_event.cdr_ingested", current_user.id, "call_event", str(event.id), {
+        "extension": data.extension,
+        "destination": data.destination,
+    })
+    await db.commit()
+    return event
+
+
+@router.post("/click-to-call")
+async def api_click_to_call(
+    data: ClickToCallRequest,
+    current_user: User = Depends(require_perm("call_events", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger a click-to-call via the telephony provider.
+
+    This creates a call event record and could trigger an external API call
+    to the telephony provider (Voxbay/Exotel) to initiate the call.
+    """
+    # Record the click-to-call as a call event
+    event_data = {
+        "event_type": "click_to_call",
+        "caller_number": data.source,
+        "called_number": data.destination,
+        "extension": data.extension,
+        "callerid": data.callerid,
+    }
+    event = await service.ingest_call_event(db, event_data)
+    await log_event(db, "call_event.click_to_call", current_user.id, "call_event", str(event.id), {
+        "source": data.source,
+        "destination": data.destination,
+    })
+    await db.commit()
+    return {"status": "initiated", "call_event_id": event.id, "source": data.source, "destination": data.destination}

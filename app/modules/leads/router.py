@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
+from app.core.websocket import broadcast_table_change
 from app.database import get_db
 from app.dependencies import require_perm
 from app.modules.leads import service
@@ -10,6 +11,7 @@ from app.modules.leads.schemas import (
     AssignmentTrackerOut,
     LeadCreate,
     LeadDetailOut,
+    LeadInfoCreate,
     LeadInfoOut,
     LeadInfoUpdate,
     LeadIntake,
@@ -42,7 +44,7 @@ async def api_list_leads(
     return {**paginate_metadata(total, page, size), "items": items}
 
 
-# ── Specialty Views ──────────────────────────────────────────────────
+# ── Specialty Views (MUST be before /{lead_id}) ──────────────────────
 
 
 @router.get("/fresh", response_model=PaginatedResponse[LeadOut])
@@ -83,6 +85,91 @@ async def api_list_bin_leads(
     return {**paginate_metadata(total, page, size), "items": items}
 
 
+@router.get("/follow-ups", response_model=PaginatedResponse[LeadOut])
+async def api_list_follow_up_leads(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    assigned_to: str | None = None,
+    start: str | None = Query(None, description="ISO date start"),
+    end: str | None = Query(None, description="ISO date end"),
+    lead_tab: str | None = None,
+    current_user: User = Depends(require_perm("leads", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Leads with follow_up date in range, excluding completed ones."""
+    items, total = await service.list_follow_up_leads(db, page, size, assigned_to, start, end, lead_tab)
+    return {**paginate_metadata(total, page, size), "items": items}
+
+
+@router.get("/new-enquiries", response_model=PaginatedResponse[LeadOut])
+async def api_list_new_enquiry_leads(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    assigned_to: str | None = None,
+    start: str | None = Query(None, description="ISO date start"),
+    end: str | None = Query(None, description="ISO date end"),
+    lead_tab: str | None = None,
+    current_user: User = Depends(require_perm("leads", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Leads created in date range for a specific assignee."""
+    items, total = await service.list_new_enquiry_leads(db, page, size, assigned_to, start, end, lead_tab)
+    return {**paginate_metadata(total, page, size), "items": items}
+
+
+@router.get("/drafts", response_model=PaginatedResponse[LeadOut])
+async def api_list_draft_leads(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(require_perm("leads", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Leads with draft_status in (draft, DRAFT)."""
+    items, total = await service.list_draft_leads(db, page, size)
+    return {**paginate_metadata(total, page, size), "items": items}
+
+
+@router.get("/completed", response_model=PaginatedResponse[LeadOut])
+async def api_list_completed_leads(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    assigned_to: str | None = None,
+    lead_tab: str | None = None,
+    current_user: User = Depends(require_perm("leads", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Leads with info_progress percentage = 100."""
+    items, total = await service.list_completed_leads(db, page, size, assigned_to, lead_tab)
+    return {**paginate_metadata(total, page, size), "items": items}
+
+
+@router.get("/study-abroad", response_model=PaginatedResponse[LeadOut])
+async def api_list_study_abroad_leads(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    lead_tab: str | None = "student",
+    current_user: User = Depends(require_perm("leads", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Study abroad leads — excludes trashed statuses and bad lead types."""
+    items, total = await service.list_study_abroad_leads(db, page, size, lead_tab)
+    return {**paginate_metadata(total, page, size), "items": items}
+
+
+@router.get("/count")
+async def api_lead_count(
+    assigned_to: str | None = None,
+    lead_tab: str | None = None,
+    start: str | None = Query(None, description="ISO date start"),
+    end: str | None = Query(None, description="ISO date end"),
+    current_user: User = Depends(require_perm("leads", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Count matching leads (for dashboard counters)."""
+    total = await service.count_leads(db, assigned_to, lead_tab, start, end)
+    return {"count": total}
+
+
 @router.get("/stats")
 async def api_lead_stats(
     current_user: User = Depends(require_perm("leads", "read")),
@@ -110,10 +197,7 @@ async def api_counselor_scores(
     current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    """View counselor scoring for auto-assignment debugging.
-
-    Returns ranked list of counselors with their scores and workload.
-    """
+    """View counselor scoring for auto-assignment debugging."""
     from app.core.auto_assign import score_counselors
 
     countries = [c.strip() for c in country_preference.split(",")] if country_preference else None
@@ -138,6 +222,61 @@ async def api_get_lead(
     return LeadDetailOut(**lead_data)
 
 
+# ── Lead Info (standalone) ───────────────────────────────────────────
+
+
+@router.get("/{lead_id}/info", response_model=LeadInfoOut)
+async def api_get_lead_info(
+    lead_id: int,
+    current_user: User = Depends(require_perm("leads", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get standalone lead_info record for a lead."""
+    info = await service.get_lead_info(db, lead_id)
+    if not info:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError(f"Lead info not found for lead {lead_id}")
+    return info
+
+
+@router.post("/{lead_id}/info", response_model=LeadInfoOut, status_code=201)
+async def api_create_lead_info(
+    lead_id: int,
+    data: LeadInfoCreate,
+    current_user: User = Depends(require_perm("leads", "create")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a lead_info record for a lead.
+    Note: DB triggers normally auto-create lead_info on lead INSERT.
+    This is for manual creation when needed.
+    """
+    info = await service.create_lead_info(db, lead_id, data)
+    await log_event(db, "lead_info.created", current_user.id, "lead", str(lead_id), {
+        "fields": list(data.model_dump(exclude_unset=True).keys()),
+    })
+    await db.commit()
+    return info
+
+
+# ── Applied Courses (for a lead) ─────────────────────────────────────
+
+
+@router.get("/{lead_id}/applied-courses")
+async def api_list_lead_applied_courses(
+    lead_id: int,
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(require_perm("leads", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch courses applied by a lead."""
+    from app.modules.courses import service as course_service
+    from app.modules.courses.schemas import AppliedCourseOut
+
+    items, total = await course_service.list_applied_courses_for_lead(db, lead_id, page, size)
+    return {**paginate_metadata(total, page, size), "items": items}
+
+
 # ── Create Lead ──────────────────────────────────────────────────────
 # DB triggers auto-handle: round-robin assignment, duplicate blocking,
 # phone normalization, fresh flag, date, lead_info row, chat conversation
@@ -154,6 +293,7 @@ async def api_create_lead(
         "name": lead.name, "source": lead.source, "assigned_to": str(lead.assigned_to) if lead.assigned_to else None,
     })
     await db.commit()
+    await broadcast_table_change("leads", "INSERT", lead.id, {"name": lead.name})
     return lead
 
 
@@ -167,9 +307,17 @@ async def api_update_lead(
     current_user: User = Depends(require_perm("leads", "update")),
     db: AsyncSession = Depends(get_db),
 ):
+    """Partial update — only provided fields are changed.
+    Accepts: name, email, phone, status, heat_status, follow_up, remark,
+    assigned_to, lead_tab, country_preference, lead_type, documents_status,
+    call_summary, info_progress, draft_status, fresh, profile_image,
+    is_premium_jobs, is_premium_courses, is_resume_downloaded, is_registered,
+    finder_type, current_module, ig_handle, freelancer_manager, freelancer.
+    """
     lead = await service.update_lead(db, lead_id, data)
     await log_event(db, "lead.updated", current_user.id, "lead", str(lead_id), data.model_dump(exclude_unset=True))
     await db.commit()
+    await broadcast_table_change("leads", "UPDATE", lead_id, data.model_dump(exclude_unset=True))
     return lead
 
 
@@ -188,6 +336,9 @@ async def api_update_lead_info(
         "fields_updated": list(data.model_dump(exclude_unset=True).keys()),
     })
     await db.commit()
+    await broadcast_table_change("lead_info", "UPDATE", lead_id, {
+        "fields_updated": list(data.model_dump(exclude_unset=True).keys()),
+    })
     return info
 
 
@@ -239,9 +390,7 @@ async def api_create_lead_from_call(
     current_user: User = Depends(require_perm("leads", "create")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Find or create a lead from an incoming phone call.
-    Uses the DB function that matches caller by phone and agent by extension.
-    """
+    """Find or create a lead from an incoming phone call."""
     result = await service.create_or_get_lead_from_call(db, caller_number, agent_number)
     if result.get("success"):
         await log_event(db, "lead.from_call", current_user.id, "lead", str(result.get("lead_id")), {
@@ -252,7 +401,6 @@ async def api_create_lead_from_call(
 
 
 # ── Lead Intake Pipeline ─────────────────────────────────────────────
-# Mirrors Supabase Edge Function `eb-lead-intake` (v2)
 
 
 @router.post("/intake", status_code=201)
@@ -261,15 +409,7 @@ async def api_lead_intake(
     current_user: User = Depends(require_perm("leads", "create")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Full lead intake pipeline — creates lead, student, auto-assigns counselor.
-
-    Mirrors the eb-lead-intake Edge Function. Orchestrates:
-    1. Create lead (DB triggers: duplicate block, phone norm, round-robin, fresh flag)
-    2. Update lead_info with detailed data
-    3. Create eb_student (DB trigger: auto-creates eb_case)
-    4. Smart auto-assign counselor (country scoring from eb-auto-assign)
-    5. Verify chat conversation was created
-    """
+    """Full lead intake pipeline — creates lead, student, auto-assigns counselor."""
     from app.core.lead_intake import run_lead_intake
 
     result = await run_lead_intake(db, data.model_dump(exclude_unset=True))
@@ -284,7 +424,6 @@ async def api_lead_intake(
 
 
 # ── Auto-Assign Counselor ────────────────────────────────────────────
-# Mirrors Supabase Edge Function `eb-auto-assign` (v2)
 
 
 @router.post("/{lead_id}/auto-assign")
@@ -293,10 +432,7 @@ async def api_auto_assign_lead(
     current_user: User = Depends(require_perm("leads", "update")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Smart auto-assign a counselor to a lead based on country match + workload scoring.
-
-    Scoring: +30 country match, -2 per active case, +10 counselor role bonus.
-    """
+    """Smart auto-assign a counselor to a lead based on country match + workload scoring."""
     from app.core.auto_assign import auto_assign_counselor
 
     lead = await service.get_lead(db, lead_id)
@@ -309,7 +445,6 @@ async def api_auto_assign_lead(
     await db.flush()
 
     from app.modules.users.models import User as UserModel
-
     from sqlalchemy import select
     counselor_result = await db.execute(select(UserModel).where(UserModel.id == counselor_id))
     counselor = counselor_result.scalar_one_or_none()
@@ -326,5 +461,3 @@ async def api_auto_assign_lead(
         "counselor_name": counselor.full_name if counselor else "Unknown",
         "status": "assigned",
     }
-
-

@@ -51,3 +51,22 @@ class CallEventCreate(BaseModel):
     callerid: str | None = None
     call_date: str | None = None
     extension: str | None = None
+
+
+class CDRCreate(BaseModel):
+    """Push a CDR (Call Detail Record) from the telephony system."""
+    extension: str | None = None
+    destination: str | None = None
+    callerid: str | None = None
+    duration_seconds: int | None = None
+    status: str | None = None
+    datetime: str | None = None
+    recording_url: str | None = None
+
+
+class ClickToCallRequest(BaseModel):
+    """Trigger a click-to-call via the telephony provider."""
+    source: str
+    destination: str
+    extension: str | None = None
+    callerid: str | None = None
