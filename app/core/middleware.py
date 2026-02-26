@@ -60,16 +60,20 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             # Extract user_id from request state if set by auth dependency
             user_id = getattr(request.state, "user_id", None)
 
-            logger.info(
-                f"{request.method} {request.url.path} {status_code} {duration_ms}ms",
-                extra={
+            extras = {
                     "request_id": request_id,
                     "user_id": str(user_id) if user_id else None,
                     "method": request.method,
                     "path": request.url.path,
                     "status_code": status_code,
                     "duration_ms": duration_ms,
-                },
+                }
+            # Log query string on errors for debugging
+            if status_code >= 400:
+                extras["query"] = str(request.url.query)
+            logger.info(
+                f"{request.method} {request.url.path} {status_code} {duration_ms}ms",
+                extra=extras,
             )
 
         # Attach request ID to response headers

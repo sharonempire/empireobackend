@@ -25,7 +25,7 @@ async def api_unified_search(
     q: str = Query(..., min_length=1, description="Search query"),
     entity_type: str = Query("all", description="Entity type: all, course, lead, student, case, policy"),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     use_ai: bool = Query(False, description="Use AI to parse natural language queries"),
     current_user: User = Depends(require_perm("search", "read")),
     db: AsyncSession = Depends(get_db),

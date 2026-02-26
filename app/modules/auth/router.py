@@ -12,6 +12,7 @@ from app.modules.auth.schemas import (
     BootstrapRequest,
     ChangePasswordRequest,
     LoginRequest,
+    LoginResponse,
     RefreshRequest,
     TokenResponse,
 )
@@ -24,7 +25,7 @@ from app.core.events import log_event
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=LoginResponse)
 async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     # Basic per-IP rate limiting for login attempts
     ip = request.client.host if request.client else "unknown"
@@ -43,7 +44,14 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
     tokens = await auth_service.issue_tokens(db, user, user_agent=request.headers.get("user-agent"), ip_address=ip)
     await log_event(db, "auth.login", actor_id=user.id, entity_type="user", entity_id=user.id, metadata={"ip": ip})
     await db.commit()
-    return tokens
+    return {
+        **tokens,
+        "user_id": user.id,
+        "profile_id": user.legacy_supabase_id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "roles": user.roles,
+    }
 
 
 @router.post("/refresh", response_model=TokenResponse)

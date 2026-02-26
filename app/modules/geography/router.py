@@ -16,7 +16,7 @@ router = APIRouter(prefix="/geography", tags=["Geography"])
 @router.get("/countries", response_model=PaginatedResponse[CountryOut])
 async def api_list_countries(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -38,7 +38,7 @@ async def api_get_country(
 @router.get("/cities", response_model=PaginatedResponse[CityOut])
 async def api_list_cities(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     country_id: int | None = None,
     current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
@@ -61,7 +61,7 @@ async def api_get_city(
 @router.get("/universities", response_model=PaginatedResponse[UniversityOut])
 async def api_list_universities(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     city_id: int | None = None,
     current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),
@@ -84,7 +84,7 @@ async def api_get_university(
 @router.get("/campuses", response_model=PaginatedResponse[CampusOut])
 async def api_list_campuses(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     university_id: int | None = None,
     current_user: User = Depends(require_perm("geography", "read")),
     db: AsyncSession = Depends(get_db),

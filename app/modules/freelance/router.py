@@ -36,7 +36,7 @@ async def api_list_commissions(
 @router.get("/freelancers", response_model=PaginatedResponse[FreelancerOut])
 async def api_list_freelancers(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("freelance", "read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -83,7 +83,7 @@ async def api_update_freelancer(
 @router.get("/managers", response_model=PaginatedResponse[FreelanceManagerOut])
 async def api_list_managers(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("freelance", "read")),
     db: AsyncSession = Depends(get_db),
 ):

@@ -16,7 +16,7 @@ router = APIRouter(prefix="/ig-sessions", tags=["IG Sessions"])
 @router.get("/sessions", response_model=PaginatedResponse[ConversationSessionOut])
 async def api_list_sessions(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     status: str | None = None,
     ig_user_id: str | None = None,
     current_user: User = Depends(require_perm("ig_sessions", "read")),

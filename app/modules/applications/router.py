@@ -17,7 +17,7 @@ router = APIRouter(prefix="/applications", tags=["Applications"])
 @router.get("/", response_model=PaginatedResponse[ApplicationOut])
 async def api_list_applications(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     case_id: UUID | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

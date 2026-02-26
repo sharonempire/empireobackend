@@ -15,7 +15,7 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 @router.get("/conversations", response_model=PaginatedResponse[ChatConversationOut])
 async def api_list_conversations(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     counselor_id: str | None = None,
     lead_uuid: str | None = None,
     current_user: User = Depends(require_perm("chat", "read")),
@@ -38,7 +38,7 @@ async def api_get_conversation(
 async def api_list_messages(
     conversation_id: int,
     page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=100),
+    size: int = Query(50, ge=1, le=500),
     current_user: User = Depends(require_perm("chat", "read")),
     db: AsyncSession = Depends(get_db),
 ):

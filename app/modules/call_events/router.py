@@ -15,8 +15,10 @@ router = APIRouter(prefix="/call-events", tags=["Call Events"])
 
 @router.get("/", response_model=PaginatedResponse[CallEventOut])
 async def api_list_call_events(
-    page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    page: int = Query(0, ge=0),
+    size: int = Query(20, ge=1, le=1000),
+    limit: int | None = Query(None, ge=1, le=1000),
+    offset: int | None = Query(None, ge=0),
     event_type: str | None = None,
     call_uuid: str | None = None,
     agent_number: str | None = None,
@@ -24,8 +26,14 @@ async def api_list_call_events(
     current_user: User = Depends(require_perm("call_events", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    items, total = await service.list_call_events(db, page, size, event_type, call_uuid, agent_number, call_date)
-    return {**paginate_metadata(total, page, size), "items": items}
+    # Support both page/size and limit/offset patterns
+    actual_size = limit if limit is not None else size
+    if offset is not None:
+        actual_page = (offset // actual_size) + 1
+    else:
+        actual_page = max(page, 1)
+    items, total = await service.list_call_events(db, actual_page, actual_size, event_type, call_uuid, agent_number, call_date)
+    return {**paginate_metadata(total, actual_page, actual_size), "items": items}
 
 
 @router.get("/stats")

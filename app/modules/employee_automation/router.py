@@ -42,7 +42,7 @@ router = APIRouter(prefix="/employee-automation", tags=["Employee Automation"])
 @router.get("/file-ingestions", response_model=PaginatedResponse[FileIngestionOut])
 async def api_list_file_ingestions(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     processing_status: str | None = None,
     current_user: User = Depends(require_perm("employee_automation", "read")),
@@ -79,7 +79,7 @@ async def api_create_file_ingestion(
 @router.get("/call-analyses", response_model=PaginatedResponse[CallAnalysisOut])
 async def api_list_call_analyses(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     transcription_status: str | None = None,
     current_user: User = Depends(require_perm("employee_automation", "read")),
@@ -116,7 +116,7 @@ async def api_create_call_analysis(
 @router.get("/metrics", response_model=PaginatedResponse[EmployeeMetricOut])
 async def api_list_employee_metrics(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     period_type: str | None = None,
     current_user: User = Depends(require_perm("employee_automation", "read")),
@@ -140,7 +140,7 @@ async def api_get_employee_metric(
 @router.get("/reviews", response_model=PaginatedResponse[PerformanceReviewOut])
 async def api_list_performance_reviews(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     status: str | None = None,
     current_user: User = Depends(require_perm("employee_automation", "read")),
@@ -191,7 +191,7 @@ async def api_update_performance_review(
 @router.get("/goals", response_model=PaginatedResponse[EmployeeGoalOut])
 async def api_list_employee_goals(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     status: str | None = None,
     current_user: User = Depends(require_perm("employee_automation", "read")),
@@ -242,7 +242,7 @@ async def api_update_employee_goal(
 @router.get("/work-logs", response_model=PaginatedResponse[WorkLogOut])
 async def api_list_work_logs(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     activity_type: str | None = None,
     current_user: User = Depends(require_perm("employee_automation", "read")),
@@ -270,7 +270,7 @@ async def api_create_work_log(
 @router.get("/patterns", response_model=PaginatedResponse[EmployeePatternOut])
 async def api_list_employee_patterns(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     is_active: bool | None = None,
     current_user: User = Depends(require_perm("employee_automation", "read")),
@@ -285,7 +285,7 @@ async def api_list_employee_patterns(
 @router.get("/schedules", response_model=PaginatedResponse[EmployeeScheduleOut])
 async def api_list_employee_schedules(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     status: str | None = None,
     current_user: User = Depends(require_perm("employee_automation", "read")),
@@ -336,7 +336,7 @@ async def api_update_employee_schedule(
 @router.get("/training", response_model=PaginatedResponse[TrainingRecordOut])
 async def api_list_training_records(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     status: str | None = None,
     current_user: User = Depends(require_perm("employee_automation", "read")),

@@ -43,7 +43,7 @@ webhook_router = APIRouter(prefix="/payments", tags=["Payments Webhooks"])
 @router.get("/", response_model=PaginatedResponse[PaymentOut])
 async def api_list_payments(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     status: str | None = None,
     user_id: str | None = None,
     platform: str | None = None,

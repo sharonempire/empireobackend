@@ -16,7 +16,7 @@ router = APIRouter(prefix="/events", tags=["Events"])
 @router.get("/", response_model=PaginatedResponse[EventOut])
 async def api_list_events(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     entity_type: str | None = None,
     entity_id: UUID | None = None,
     event_type: str | None = None,

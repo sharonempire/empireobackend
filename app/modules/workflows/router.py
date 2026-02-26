@@ -24,7 +24,7 @@ async def api_list_definitions(
 @router.get("/instances", response_model=PaginatedResponse[WorkflowInstanceOut])
 async def api_list_instances(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     entity_type: str | None = None,
     entity_id: UUID | None = None,
     current_user: User = Depends(require_perm("workflows", "read")),

@@ -17,7 +17,7 @@ router = APIRouter(prefix="/students", tags=["Students"])
 @router.get("/", response_model=PaginatedResponse[StudentOut])
 async def api_list_students(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     counselor_id: UUID | None = None,
     search: str | None = None,
     current_user: User = Depends(get_current_user),

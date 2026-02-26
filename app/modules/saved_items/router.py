@@ -14,7 +14,7 @@ router = APIRouter(prefix="/saved-items", tags=["Saved Items"])
 @router.get("/jobs", response_model=PaginatedResponse[SavedJobOut])
 async def api_list_saved_jobs(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     user_id: int | None = None,
     current_user: User = Depends(require_perm("saved_items", "read")),
     db: AsyncSession = Depends(get_db),

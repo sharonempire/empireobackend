@@ -15,7 +15,7 @@ router = APIRouter(prefix="/utility", tags=["Utility"])
 @router.get("/short-links", response_model=PaginatedResponse[ShortLinkOut])
 async def api_list_short_links(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("utility", "read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -49,7 +49,7 @@ async def api_create_short_link(
 @router.get("/chatbot-sessions", response_model=PaginatedResponse[ChatbotSessionOut])
 async def api_list_chatbot_sessions(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("utility", "read")),
     db: AsyncSession = Depends(get_db),
 ):

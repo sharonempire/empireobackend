@@ -17,7 +17,7 @@ router = APIRouter(prefix="/policies", tags=["Policies"])
 @router.get("/", response_model=PaginatedResponse[PolicyOut])
 async def api_list_policies(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     category: str | None = None,
     department: str | None = None,
     is_active: bool | None = None,

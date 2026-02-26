@@ -14,7 +14,7 @@ router = APIRouter(prefix="/intakes", tags=["Intakes"])
 @router.get("/", response_model=PaginatedResponse[IntakeOut])
 async def api_list_intakes(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("intakes", "read")),
     db: AsyncSession = Depends(get_db),
 ):

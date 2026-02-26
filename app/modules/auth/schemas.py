@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, EmailStr
 
 
@@ -10,6 +12,15 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class LoginResponse(TokenResponse):
+    """Extended login response with user info for the frontend."""
+    user_id: UUID
+    profile_id: UUID | None = None
+    email: str
+    full_name: str
+    roles: list[str] = []
 
 
 class RefreshRequest(BaseModel):

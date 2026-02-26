@@ -17,7 +17,7 @@ router = APIRouter(prefix="/cases", tags=["Cases"])
 @router.get("/", response_model=PaginatedResponse[CaseOut])
 async def api_list_cases(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     is_active: bool | None = None,
     counselor_id: UUID | None = None,
     stage: str | None = None,

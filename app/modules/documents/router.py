@@ -17,7 +17,7 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 @router.get("/", response_model=PaginatedResponse[DocumentOut])
 async def api_list_documents(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     entity_type: str | None = None,
     entity_id: UUID | None = None,
     current_user: User = Depends(get_current_user),

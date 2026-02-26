@@ -17,7 +17,7 @@ router = APIRouter(prefix="/ai-artifacts", tags=["AI Artifacts"])
 @router.get("/", response_model=PaginatedResponse[AiArtifactOut])
 async def api_list_ai_artifacts(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     artifact_type: str | None = None,
     entity_type: str | None = None,
     entity_id: UUID | None = None,

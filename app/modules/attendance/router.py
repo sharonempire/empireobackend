@@ -17,7 +17,7 @@ router = APIRouter(prefix="/attendance", tags=["Attendance"])
 @router.get("/", response_model=PaginatedResponse[AttendanceOut])
 async def api_list_attendance(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     date: str | None = None,
     attendance_status: str | None = None,

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, computed_field
 
 
 class UserOut(BaseModel):
@@ -16,11 +16,18 @@ class UserOut(BaseModel):
     location: str | None = None
     countries: list | dict | None = None
     last_login_at: datetime | None = None
+    legacy_supabase_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
     roles: list[str] = []
 
     model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def profile_id(self) -> UUID | None:
+        """The legacy profiles table ID — used by the Flutter frontend."""
+        return self.legacy_supabase_id
 
 
 class UserCreate(BaseModel):

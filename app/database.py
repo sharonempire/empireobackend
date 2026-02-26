@@ -4,7 +4,16 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
 
-engine = create_async_engine(settings.DATABASE_URL, echo=False, pool_size=20, max_overflow=10)
+# Enable SSL for external databases (e.g. Supabase)
+_connect_args = {}
+if "supabase" in settings.DATABASE_URL or "pooler.supabase" in settings.DATABASE_URL:
+    import ssl as _ssl
+    _ctx = _ssl.create_default_context()
+    _ctx.check_hostname = False
+    _ctx.verify_mode = _ssl.CERT_NONE
+    _connect_args = {"ssl": _ctx}
+
+engine = create_async_engine(settings.DATABASE_URL, echo=False, pool_size=20, max_overflow=10, connect_args=_connect_args)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 # Sync engine + session factory for Celery workers (uses psycopg2 driver)

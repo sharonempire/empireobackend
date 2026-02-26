@@ -31,7 +31,7 @@ router = APIRouter(prefix="/leads", tags=["Leads"])
 @router.get("/", response_model=PaginatedResponse[LeadOut])
 async def api_list_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     search: str | None = None,
     status: str | None = None,
     heat_status: str | None = None,
@@ -50,7 +50,7 @@ async def api_list_leads(
 @router.get("/fresh", response_model=PaginatedResponse[LeadOut])
 async def api_list_fresh_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -62,7 +62,7 @@ async def api_list_fresh_leads(
 @router.get("/backlog", response_model=PaginatedResponse[LeadOut])
 async def api_list_backlog_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -74,7 +74,7 @@ async def api_list_backlog_leads(
 @router.get("/bin", response_model=PaginatedResponse[LeadOut])
 async def api_list_bin_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     start_date: str | None = None,
     end_date: str | None = None,
     current_user: User = Depends(require_perm("leads", "read")),
@@ -88,7 +88,7 @@ async def api_list_bin_leads(
 @router.get("/follow-ups", response_model=PaginatedResponse[LeadOut])
 async def api_list_follow_up_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     assigned_to: str | None = None,
     start: str | None = Query(None, description="ISO date start"),
     end: str | None = Query(None, description="ISO date end"),
@@ -104,7 +104,7 @@ async def api_list_follow_up_leads(
 @router.get("/new-enquiries", response_model=PaginatedResponse[LeadOut])
 async def api_list_new_enquiry_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     assigned_to: str | None = None,
     start: str | None = Query(None, description="ISO date start"),
     end: str | None = Query(None, description="ISO date end"),
@@ -120,7 +120,7 @@ async def api_list_new_enquiry_leads(
 @router.get("/drafts", response_model=PaginatedResponse[LeadOut])
 async def api_list_draft_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=100),
+    size: int = Query(50, ge=1, le=500),
     current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -132,7 +132,7 @@ async def api_list_draft_leads(
 @router.get("/completed", response_model=PaginatedResponse[LeadOut])
 async def api_list_completed_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     assigned_to: str | None = None,
     lead_tab: str | None = None,
     current_user: User = Depends(require_perm("leads", "read")),
@@ -146,7 +146,7 @@ async def api_list_completed_leads(
 @router.get("/study-abroad", response_model=PaginatedResponse[LeadOut])
 async def api_list_study_abroad_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=100),
+    size: int = Query(50, ge=1, le=500),
     lead_tab: str | None = "student",
     current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
@@ -265,7 +265,7 @@ async def api_create_lead_info(
 async def api_list_lead_applied_courses(
     lead_id: int,
     page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=100),
+    size: int = Query(50, ge=1, le=500),
     current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):

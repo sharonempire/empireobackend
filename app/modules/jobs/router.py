@@ -14,7 +14,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 @router.get("/profiles", response_model=PaginatedResponse[JobProfileOut])
 async def api_list_job_profiles(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("jobs", "read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -25,7 +25,7 @@ async def api_list_job_profiles(
 @router.get("/", response_model=PaginatedResponse[JobOut])
 async def api_list_jobs(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     status: str | None = None,
     current_user: User = Depends(require_perm("jobs", "read")),
     db: AsyncSession = Depends(get_db),
@@ -46,7 +46,7 @@ async def api_get_job(
 @router.get("/applied/list", response_model=PaginatedResponse[AppliedJobOut])
 async def api_list_applied_jobs(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     user_id: str | None = None,
     current_user: User = Depends(require_perm("jobs", "read")),
     db: AsyncSession = Depends(get_db),

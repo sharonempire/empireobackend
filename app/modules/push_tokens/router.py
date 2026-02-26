@@ -22,7 +22,7 @@ router = APIRouter(prefix="/push-tokens", tags=["Push Tokens"])
 @router.get("/", response_model=PaginatedResponse[UserPushTokenOut])
 async def api_list_push_tokens(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     user_id: UUID | None = None,
     current_user: User = Depends(require_perm("push_tokens", "read")),
     db: AsyncSession = Depends(get_db),
@@ -59,7 +59,7 @@ async def api_delete_push_token(
 @router.get("/fcm", response_model=PaginatedResponse[UserFCMTokenOut])
 async def api_list_fcm_tokens(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     user_id: UUID | None = None,
     current_user: User = Depends(require_perm("push_tokens", "read")),
     db: AsyncSession = Depends(get_db),

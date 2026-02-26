@@ -17,7 +17,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 @router.get("/", response_model=PaginatedResponse[TaskOut])
 async def api_list_tasks(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     assigned_to: UUID | None = None,
     status: str | None = None,
     entity_type: str | None = None,
@@ -32,7 +32,7 @@ async def api_list_tasks(
 @router.get("/my", response_model=PaginatedResponse[TaskOut])
 async def api_my_tasks(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     status: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

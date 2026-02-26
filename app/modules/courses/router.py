@@ -15,7 +15,7 @@ router = APIRouter(prefix="/courses", tags=["Courses"])
 @router.get("/", response_model=PaginatedResponse[CourseOut])
 async def api_list_courses(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     country: str | None = None,
     program_level: str | None = None,
     current_user: User = Depends(require_perm("courses", "read")),
@@ -29,7 +29,7 @@ async def api_list_courses(
 async def api_search_courses(
     q: str = Query(..., min_length=1),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("courses", "read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -42,7 +42,7 @@ async def api_search_courses(
 async def api_eligible_courses(
     lead_id: int,
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(require_perm("courses", "read")),
     db: AsyncSession = Depends(get_db),
 ):

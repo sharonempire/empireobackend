@@ -16,7 +16,7 @@ class JSONFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
         # Attach extras if present
-        for key in ("request_id", "user_id", "method", "path", "status_code", "duration_ms"):
+        for key in ("request_id", "user_id", "method", "path", "status_code", "duration_ms", "query"):
             val = getattr(record, key, None)
             if val is not None:
                 log_entry[key] = val

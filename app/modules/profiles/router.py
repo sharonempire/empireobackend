@@ -16,7 +16,7 @@ router = APIRouter(prefix="/profiles", tags=["Profiles"])
 @router.get("/", response_model=PaginatedResponse[ProfileOut])
 async def api_list_profiles(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     user_type: str | None = None,
     designation: str | None = None,
     current_user: User = Depends(require_perm("profiles", "read")),
