@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.attendance.models import Attendance
 
 
@@ -59,6 +59,16 @@ async def check_in(
     now = datetime.now(timezone.utc)
     if not date_str:
         date_str = now.strftime("%A, %B %d, %Y")  # "Friday, February 25, 2026"
+
+    # Prevent duplicate check-in for the same employee on the same date
+    existing = await db.execute(
+        select(Attendance).where(
+            Attendance.employee_id == employee_id,
+            Attendance.date == date_str,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise ConflictError("Already checked in for today")
 
     record = Attendance(
         employee_id=employee_id,

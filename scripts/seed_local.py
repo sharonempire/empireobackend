@@ -96,6 +96,28 @@ PERMISSIONS = [
     ("064f5be6-16c0-4347-8ff1-52859563a03f", "workflows", "manage"),
     ("97670edf-cdcd-47e1-ba2d-ecc7e4893aee", "workflows", "read"),
     ("4282537a-995d-49fd-a3ec-4fa17951a351", "workflows", "update"),
+    # Module permissions (added for Flutter frontend)
+    ("a0000001-0000-0000-0000-000000000001", "attendance", "read"),
+    ("a0000001-0000-0000-0000-000000000002", "attendance", "create"),
+    ("a0000001-0000-0000-0000-000000000003", "attendance", "update"),
+    ("a0000001-0000-0000-0000-000000000004", "attendance", "delete"),
+    ("a0000001-0000-0000-0000-000000000005", "call_events", "read"),
+    ("a0000001-0000-0000-0000-000000000006", "call_events", "create"),
+    ("a0000001-0000-0000-0000-000000000007", "leads", "read"),
+    ("a0000001-0000-0000-0000-000000000008", "leads", "create"),
+    ("a0000001-0000-0000-0000-000000000009", "leads", "update"),
+    ("a0000001-0000-0000-0000-000000000010", "leads", "delete"),
+    ("a0000001-0000-0000-0000-000000000011", "profiles", "read"),
+    ("a0000001-0000-0000-0000-000000000012", "profiles", "update"),
+    ("a0000001-0000-0000-0000-000000000013", "courses", "read"),
+    ("a0000001-0000-0000-0000-000000000014", "courses", "update"),
+    ("a0000001-0000-0000-0000-000000000015", "chat", "read"),
+    ("a0000001-0000-0000-0000-000000000016", "chat", "create"),
+    ("a0000001-0000-0000-0000-000000000017", "geography", "read"),
+    ("a0000001-0000-0000-0000-000000000018", "intakes", "read"),
+    ("a0000001-0000-0000-0000-000000000019", "jobs", "read"),
+    ("a0000001-0000-0000-0000-000000000020", "ig_sessions", "read"),
+    ("a0000001-0000-0000-0000-000000000021", "ig_sessions", "update"),
 ]
 
 # (id, email, full_name, department, is_active, legacy_supabase_id, phone, caller_id, location, countries_json)
@@ -187,6 +209,9 @@ PROCESSOR_PERMS = [
     ("workflows", "read"),
     ("actions", "read"), ("actions", "create"),
     ("users", "read"),
+    ("attendance", "read"), ("attendance", "create"), ("attendance", "update"),
+    ("call_events", "read"), ("leads", "read"),
+    ("profiles", "read"), ("courses", "read"), ("geography", "read"),
 ]
 PROCESSOR_PERM_IDS = [PERM_LOOKUP[k] for k in PROCESSOR_PERMS]
 
@@ -212,6 +237,9 @@ VIEWER_PERMS = [
     ("tasks", "read"),
     ("users", "read"),
     ("workflows", "read"),
+    ("attendance", "read"), ("call_events", "read"), ("leads", "read"),
+    ("profiles", "read"), ("courses", "read"), ("chat", "read"),
+    ("geography", "read"), ("intakes", "read"), ("jobs", "read"),
 ]
 VIEWER_PERM_IDS = [PERM_LOOKUP[k] for k in VIEWER_PERMS]
 
