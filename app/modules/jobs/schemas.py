@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -33,11 +34,13 @@ class JobOut(BaseModel):
 class AppliedJobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: UUID
     job_id: Optional[int] = None
     user_id: Optional[int] = None
     status: Optional[str] = None
     applied_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     candidate_name: Optional[str] = None
     job_title: Optional[str] = None
+    job_details: Optional[Any] = None

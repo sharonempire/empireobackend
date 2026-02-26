@@ -27,3 +27,6 @@ htmlcov/
 .coverage
 celerybeat-schedule
 celerybeat.pid
+
+# Supabase data export (large JSON files)
+scripts/data/

@@ -1,5 +1,7 @@
 """Chat service layer."""
 
+from uuid import UUID
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +32,7 @@ async def list_conversations(
     return result.scalars().all(), total
 
 
-async def get_conversation(db: AsyncSession, conversation_id: int) -> ChatConversation:
+async def get_conversation(db: AsyncSession, conversation_id: UUID) -> ChatConversation:
     result = await db.execute(
         select(ChatConversation).where(ChatConversation.id == conversation_id)
     )
@@ -42,7 +44,7 @@ async def get_conversation(db: AsyncSession, conversation_id: int) -> ChatConver
 
 async def list_messages(
     db: AsyncSession,
-    conversation_id: int,
+    conversation_id: UUID,
     page: int = 1,
     size: int = 50,
 ) -> tuple[list[ChatMessage], int]:
@@ -71,7 +73,7 @@ async def send_message(db: AsyncSession, data: dict) -> ChatMessage:
 
 
 async def mark_messages_read(
-    db: AsyncSession, conversation_id: int, user_id: str
+    db: AsyncSession, conversation_id: UUID, user_id: str
 ) -> int:
     """Mark all messages in a conversation as read using DB function."""
     from sqlalchemy import text

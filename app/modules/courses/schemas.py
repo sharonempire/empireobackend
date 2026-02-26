@@ -33,7 +33,7 @@ class CourseOut(BaseModel):
     course_description: str | None = None
     special_requirements: str | None = None
     field_of_study: str | None = None
-    commission: dict | list | None = None
+    commission: dict | list | int | float | str | None = None
     domain: str | None = None
     keywords: list[str] | None = None
     application_status: str | None = None

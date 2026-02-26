@@ -1,5 +1,7 @@
+import uuid
+
 from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.core.enums import ApplicationStatusEnum
 from app.database import Base
@@ -42,14 +44,16 @@ class JobCountry(Base):
 class AppliedJob(Base):
     __tablename__ = "applied_jobs"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id = Column(BigInteger, nullable=True)
     user_id = Column(BigInteger, nullable=True)
     status = Column(Text, nullable=True)
     applied_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=True)
-    
+    updated_at = Column(DateTime(timezone=True), nullable=True)
+
     # Missing columns from audit
     candidate_name = Column(Text, nullable=True)
     job_title = Column(Text, nullable=True)
+    job_details = Column(JSONB, nullable=True)
 

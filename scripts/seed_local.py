@@ -406,16 +406,16 @@ def seed():
 
     try:
         # ---------------------------------------------------------------
-        # 1. Clear existing data (FK-safe order)
+        # 1. Clear existing seed data (FK-safe order)
+        #    Don't delete eb_users or profiles — they may have FK refs
+        #    from imported data (eb_students, leadslist, attendance)
         # ---------------------------------------------------------------
         print("\n[1/7] Clearing existing seed data ...")
         _run(session, "DELETE eb_user_roles", "DELETE FROM eb_user_roles")
         _run(session, "DELETE eb_role_permissions", "DELETE FROM eb_role_permissions")
         _run(session, "DELETE eb_refresh_tokens", "DELETE FROM eb_refresh_tokens")
-        _run(session, "DELETE eb_users", "DELETE FROM eb_users")
         _run(session, "DELETE eb_roles", "DELETE FROM eb_roles")
         _run(session, "DELETE eb_permissions", "DELETE FROM eb_permissions")
-        _run(session, "DELETE profiles", "DELETE FROM profiles")
 
         # ---------------------------------------------------------------
         # 2. Insert roles
@@ -464,7 +464,11 @@ def seed():
                 VALUES (:id, :email, :full_name, :hashed_password, :department,
                         :is_active, :legacy_supabase_id, :phone, :caller_id,
                         :location, CAST(:countries AS jsonb), NOW(), NOW())
-                ON CONFLICT (id) DO NOTHING
+                ON CONFLICT (id) DO UPDATE SET
+                    hashed_password = EXCLUDED.hashed_password,
+                    is_active = EXCLUDED.is_active,
+                    legacy_supabase_id = EXCLUDED.legacy_supabase_id,
+                    updated_at = NOW()
                 """,
                 {
                     "id": uid,
@@ -539,7 +543,10 @@ def seed():
                     VALUES (:id, :diplay_name, :profilepicture, :designation, :phone,
                             :email, :caller_id, :location, CAST(:countries AS text[]), :user_type,
                             :freelancer_status, :fcm_token, :user_id)
-                    ON CONFLICT (id) DO NOTHING
+                    ON CONFLICT (id) DO UPDATE SET
+                        diplay_name = EXCLUDED.diplay_name,
+                        designation = EXCLUDED.designation,
+                        profilepicture = COALESCE(EXCLUDED.profilepicture, profiles.profilepicture)
                     """,
                     {
                         "id": pid,

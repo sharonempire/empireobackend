@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +29,7 @@ async def api_list_conversations(
 
 @router.get("/conversations/{conversation_id}", response_model=ChatConversationOut)
 async def api_get_conversation(
-    conversation_id: int,
+    conversation_id: UUID,
     current_user: User = Depends(require_perm("chat", "read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -36,7 +38,7 @@ async def api_get_conversation(
 
 @router.get("/conversations/{conversation_id}/messages", response_model=PaginatedResponse[ChatMessageOut])
 async def api_list_messages(
-    conversation_id: int,
+    conversation_id: UUID,
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=500),
     current_user: User = Depends(require_perm("chat", "read")),
@@ -48,7 +50,7 @@ async def api_list_messages(
 
 @router.post("/conversations/{conversation_id}/messages", response_model=ChatMessageOut, status_code=201)
 async def api_send_message(
-    conversation_id: int,
+    conversation_id: UUID,
     data: ChatMessageCreate,
     current_user: User = Depends(require_perm("chat", "create")),
     db: AsyncSession = Depends(get_db),
@@ -58,7 +60,7 @@ async def api_send_message(
     msg_data["conversation_id"] = conversation_id
     msg = await service.send_message(db, msg_data)
     await log_event(db, "chat.message_sent", current_user.id, "chat_message", str(msg.id), {
-        "conversation_id": conversation_id,
+        "conversation_id": str(conversation_id),
     })
     await db.commit()
     return msg
@@ -66,7 +68,7 @@ async def api_send_message(
 
 @router.post("/conversations/{conversation_id}/read")
 async def api_mark_read(
-    conversation_id: int,
+    conversation_id: UUID,
     current_user: User = Depends(require_perm("chat", "read")),
     db: AsyncSession = Depends(get_db),
 ):
