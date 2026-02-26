@@ -61,7 +61,7 @@ class UserRole(Base):
     role_id = Column(UUID(as_uuid=True), ForeignKey("eb_roles.id"), primary_key=True)
 
     user = relationship("User", back_populates="user_roles")
-    role = relationship("Role")
+    role = relationship("Role", lazy="selectin")
 
 
 class RolePermission(Base):
