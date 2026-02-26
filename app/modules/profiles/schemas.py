@@ -20,3 +20,17 @@ class ProfileOut(BaseModel):
     countries: Optional[list[str]] = None
     fcm_token: Optional[str] = None
     user_id: Optional[str] = None
+
+
+class ProfileSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    diplay_name: Optional[str] = None
+    profilepicture: Optional[str] = None
+    designation: Optional[str] = None
+    email: Optional[str] = None
+
+
+class ProfileBatchRequest(BaseModel):
+    profile_ids: list[UUID]

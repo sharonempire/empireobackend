@@ -235,3 +235,72 @@ async def employee_trends(db: AsyncSession, employee_id: UUID, periods: int = 12
         }
         for r in rows
     ]
+
+
+async def dashboard_summary(db: AsyncSession) -> dict:
+    """Combined dashboard stats for the main dashboard."""
+    from datetime import datetime, timedelta, timezone
+    from app.modules.attendance.models import Attendance
+    from app.modules.profiles.models import Profile
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=today_start.weekday())
+    month_start = today_start.replace(day=1)
+
+    # Lead stats
+    total_leads = (await db.execute(select(func.count()).select_from(Lead))).scalar()
+    fresh_leads = (await db.execute(
+        select(func.count()).select_from(Lead).where(Lead.fresh.is_(True))
+    )).scalar()
+    backlog_leads = (await db.execute(
+        select(func.count()).select_from(Lead).where(Lead.assigned_to.is_(None))
+    )).scalar()
+
+    # Lead counts by time period
+    leads_today = (await db.execute(
+        select(func.count()).select_from(Lead).where(Lead.created_at >= today_start)
+    )).scalar()
+    leads_this_week = (await db.execute(
+        select(func.count()).select_from(Lead).where(Lead.created_at >= week_start)
+    )).scalar()
+    leads_this_month = (await db.execute(
+        select(func.count()).select_from(Lead).where(Lead.created_at >= month_start)
+    )).scalar()
+
+    # Lead breakdown by status
+    status_result = await db.execute(
+        select(Lead.status, func.count()).group_by(Lead.status)
+    )
+    by_status = {row[0] or "unset": row[1] for row in status_result.all()}
+
+    # Attendance today
+    today_str = now.strftime("%Y-%m-%d")
+    from sqlalchemy import text
+    att_result = await db.execute(
+        text("SELECT COUNT(*) FILTER (WHERE checkinat IS NOT NULL AND checkoutat IS NULL) AS checked_in, "
+             "COUNT(*) FILTER (WHERE checkoutat IS NOT NULL) AS checked_out, "
+             "COUNT(*) AS total_records "
+             "FROM attendance WHERE date = :today"),
+        {"today": today_str}
+    )
+    att_row = att_result.one()
+    total_employees = (await db.execute(select(func.count()).select_from(Profile))).scalar()
+
+    return {
+        "leads": {
+            "total": total_leads,
+            "fresh": fresh_leads,
+            "backlog": backlog_leads,
+            "by_status": by_status,
+        },
+        "leads_today": leads_today,
+        "leads_this_week": leads_this_week,
+        "leads_this_month": leads_this_month,
+        "attendance": {
+            "checked_in": att_row[0],
+            "checked_out": att_row[1],
+            "not_checked_in": max(0, total_employees - att_row[2]),
+            "total_employees": total_employees,
+        },
+    }

@@ -55,7 +55,7 @@ class LeadOut(BaseModel):
     is_premium_jobs: bool | None = None
     is_premium_courses: bool | None = None
     is_resume_downloaded: bool | None = None
-    country_preference: list[str] | None = None
+    country_preference: list[str | None] | None = None
     is_registered: bool | None = None
     user_id: str | None = None
     fcm_token: str | None = None
@@ -184,6 +184,11 @@ class AssignmentTrackerOut(BaseModel):
     last_assigned_employee: UUID | None = None
 
     model_config = {"from_attributes": True}
+
+
+class LeadInfoBatchRequest(BaseModel):
+    """Batch fetch lead_info for multiple leads."""
+    lead_ids: list[int]
 
 
 class LeadIntake(BaseModel):

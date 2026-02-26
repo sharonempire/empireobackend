@@ -136,3 +136,70 @@ async def update_applied_course(
     await db.flush()
     await db.refresh(item)
     return item
+
+
+# ── Course CRUD + Approval ──────────────────────────────────────────
+
+
+async def create_course(db: AsyncSession, data) -> Course:
+    course = Course(**data.model_dump(exclude_unset=True))
+    db.add(course)
+    await db.flush()
+    await db.refresh(course)
+    return course
+
+
+async def update_course(db: AsyncSession, course_id: int, data) -> Course:
+    course = await get_course(db, course_id)
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(course, key, value)
+    await db.flush()
+    await db.refresh(course)
+    return course
+
+
+async def bulk_import_courses(db: AsyncSession, items: list[dict]) -> int:
+    count = 0
+    for item in items:
+        course = Course(**item)
+        db.add(course)
+        count += 1
+    await db.flush()
+    return count
+
+
+async def list_pending_courses(
+    db: AsyncSession,
+    page: int = 1,
+    size: int = 20,
+) -> tuple[list[Course], int]:
+    condition = or_(
+        func.lower(func.coalesce(Course.approval_status, '')) == 'pending',
+    )
+    count_stmt = select(func.count()).select_from(Course).where(condition)
+    total = (await db.execute(count_stmt)).scalar()
+
+    stmt = (
+        select(Course)
+        .where(condition)
+        .order_by(Course.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
+
+
+async def approve_course(
+    db: AsyncSession,
+    course_id: int,
+    status: str,
+    approved_detail: str | None = None,
+) -> Course:
+    course = await get_course(db, course_id)
+    course.approval_status = status
+    if approved_detail:
+        course.approved_detail = approved_detail
+    await db.flush()
+    await db.refresh(course)
+    return course

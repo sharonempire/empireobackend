@@ -41,7 +41,12 @@ async def list_leads(
     heat_status: str | None = None,
     lead_tab: str | None = None,
     assigned_to: str | None = None,
+    phone: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> tuple[list, int]:
+    from datetime import datetime as dt
+
     # Use hybrid search when a search query is provided
     if search:
         filters: dict[str, str] = {}
@@ -79,6 +84,17 @@ async def list_leads(
     if assigned_to:
         stmt = stmt.where(Lead.assigned_to == assigned_to)
         count_stmt = count_stmt.where(Lead.assigned_to == assigned_to)
+    if phone:
+        # Match on normalized phone or raw phone
+        phone_clean = phone.lstrip("+").replace(" ", "").replace("-", "")
+        stmt = stmt.where(func.coalesce(Lead.phone_norm, "").like(f"%{phone_clean}%"))
+        count_stmt = count_stmt.where(func.coalesce(Lead.phone_norm, "").like(f"%{phone_clean}%"))
+    if start_date:
+        stmt = stmt.where(Lead.created_at >= dt.fromisoformat(start_date))
+        count_stmt = count_stmt.where(Lead.created_at >= dt.fromisoformat(start_date))
+    if end_date:
+        stmt = stmt.where(Lead.created_at <= dt.fromisoformat(end_date))
+        count_stmt = count_stmt.where(Lead.created_at <= dt.fromisoformat(end_date))
 
     total = (await db.execute(count_stmt)).scalar()
     stmt = stmt.offset((page - 1) * size).limit(size).order_by(Lead.id.desc())
@@ -167,6 +183,35 @@ async def create_lead_info(
     await db.flush()
     await db.refresh(info)
     return info
+
+
+# ── Delete Lead ─────────────────────────────────────────────────────
+
+
+async def delete_lead(db: AsyncSession, lead_id: int) -> None:
+    """Delete a lead and its lead_info record."""
+    lead = await get_lead(db, lead_id)
+    # Delete lead_info first (FK constraint)
+    info = await get_lead_info(db, lead_id)
+    if info:
+        await db.delete(info)
+    await db.delete(lead)
+    await db.flush()
+
+
+# ── Batch Lead Info ─────────────────────────────────────────────────
+
+
+async def batch_get_lead_infos(
+    db: AsyncSession, lead_ids: list[int]
+) -> list[LeadInfo]:
+    """Batch fetch lead_info records for multiple lead IDs."""
+    if not lead_ids:
+        return []
+    result = await db.execute(
+        select(LeadInfo).where(LeadInfo.id.in_(lead_ids))
+    )
+    return result.scalars().all()
 
 
 # ── Reassign Lead ────────────────────────────────────────────────────
@@ -354,14 +399,16 @@ async def list_follow_up_leads(
     """Leads with follow_up date in range, excluding 100% completed."""
     from sqlalchemy import and_, cast, String
 
+    from datetime import datetime as dt
+
     conditions = [Lead.date.isnot(None)]
 
     if assigned_to:
         conditions.append(Lead.assigned_to == assigned_to)
     if start:
-        conditions.append(Lead.date >= start)
+        conditions.append(Lead.date >= dt.fromisoformat(start))
     if end:
-        conditions.append(Lead.date <= end)
+        conditions.append(Lead.date <= dt.fromisoformat(end))
     if lead_tab:
         conditions.append(Lead.lead_tab == lead_tab)
 
@@ -396,6 +443,8 @@ async def list_new_enquiry_leads(
     lead_tab: str | None = None,
 ) -> tuple[list[Lead], int]:
     """Leads created in date range for a specific assignee."""
+    from datetime import datetime as dt
+
     from sqlalchemy import and_
 
     conditions = []
@@ -403,9 +452,9 @@ async def list_new_enquiry_leads(
     if assigned_to:
         conditions.append(Lead.assigned_to == assigned_to)
     if start:
-        conditions.append(Lead.created_at >= start)
+        conditions.append(Lead.created_at >= dt.fromisoformat(start))
     if end:
-        conditions.append(Lead.created_at <= end)
+        conditions.append(Lead.created_at <= dt.fromisoformat(end))
     if lead_tab:
         conditions.append(Lead.lead_tab == lead_tab)
 
@@ -518,6 +567,8 @@ async def count_leads(
     end: str | None = None,
 ) -> int:
     """Count matching leads (for dashboard counters)."""
+    from datetime import datetime as dt
+
     from sqlalchemy import and_
 
     conditions = []
@@ -527,9 +578,9 @@ async def count_leads(
     if lead_tab:
         conditions.append(Lead.lead_tab == lead_tab)
     if start:
-        conditions.append(Lead.created_at >= start)
+        conditions.append(Lead.created_at >= dt.fromisoformat(start))
     if end:
-        conditions.append(Lead.created_at <= end)
+        conditions.append(Lead.created_at <= dt.fromisoformat(end))
 
     where = and_(*conditions) if conditions else True
     count_stmt = select(func.count()).select_from(Lead).where(where)

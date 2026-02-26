@@ -7,7 +7,7 @@ from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
 from app.dependencies import require_perm
 from app.modules.profiles import service
-from app.modules.profiles.schemas import ProfileOut
+from app.modules.profiles.schemas import ProfileBatchRequest, ProfileOut, ProfileSummaryOut
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/profiles", tags=["Profiles"])
@@ -24,6 +24,19 @@ async def api_list_profiles(
 ):
     items, total = await service.list_profiles(db, page, size, user_type, designation)
     return {**paginate_metadata(total, page, size), "items": items}
+
+
+@router.post("/batch", response_model=list[ProfileSummaryOut])
+async def api_batch_profiles(
+    data: ProfileBatchRequest,
+    current_user: User = Depends(require_perm("profiles", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch fetch profile summaries by IDs (max 100)."""
+    if len(data.profile_ids) > 100:
+        from app.core.exceptions import BadRequestError
+        raise BadRequestError("Maximum 100 profile IDs per batch request")
+    return await service.batch_get_profiles(db, data.profile_ids)
 
 
 @router.get("/counselors")

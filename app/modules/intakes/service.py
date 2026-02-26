@@ -23,3 +23,20 @@ async def get_intake(db: AsyncSession, intake_id: int) -> Intake:
     if not intake:
         raise NotFoundError("Intake not found")
     return intake
+
+
+async def create_intake(db: AsyncSession, data) -> Intake:
+    intake = Intake(**data.model_dump(exclude_unset=True))
+    db.add(intake)
+    await db.flush()
+    await db.refresh(intake)
+    return intake
+
+
+async def update_intake(db: AsyncSession, intake_id: int, data) -> Intake:
+    intake = await get_intake(db, intake_id)
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(intake, key, value)
+    await db.flush()
+    await db.refresh(intake)
+    return intake

@@ -97,3 +97,81 @@ async def get_campus(db: AsyncSession, campus_id: int) -> Campus:
     if not campus:
         raise NotFoundError("Campus not found")
     return campus
+
+
+# ── CUD Operations ──────────────────────────────────────────────────────────
+
+# Countries
+
+async def create_country(db: AsyncSession, data) -> Country:
+    country = Country(**data.model_dump(exclude_unset=True))
+    db.add(country)
+    await db.flush()
+    await db.refresh(country)
+    return country
+
+
+async def update_country(db: AsyncSession, country_id: int, data) -> Country:
+    country = await get_country(db, country_id)
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(country, key, value)
+    await db.flush()
+    await db.refresh(country)
+    return country
+
+
+# Cities
+
+async def create_city(db: AsyncSession, data) -> City:
+    city = City(**data.model_dump(exclude_unset=True))
+    db.add(city)
+    await db.flush()
+    await db.refresh(city)
+    return city
+
+
+async def update_city(db: AsyncSession, city_id: int, data) -> City:
+    city = await get_city(db, city_id)
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(city, key, value)
+    await db.flush()
+    await db.refresh(city)
+    return city
+
+
+# Universities
+
+async def create_university(db: AsyncSession, data) -> University:
+    university = University(**data.model_dump(exclude_unset=True))
+    db.add(university)
+    await db.flush()
+    await db.refresh(university)
+    return university
+
+
+async def update_university(db: AsyncSession, university_id: int, data) -> University:
+    university = await get_university(db, university_id)
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(university, key, value)
+    await db.flush()
+    await db.refresh(university)
+    return university
+
+
+# Campuses
+
+async def create_campus(db: AsyncSession, data) -> Campus:
+    campus = Campus(**data.model_dump(exclude_unset=True))
+    db.add(campus)
+    await db.flush()
+    await db.refresh(campus)
+    return campus
+
+
+async def update_campus(db: AsyncSession, campus_id: int, data) -> Campus:
+    campus = await get_campus(db, campus_id)
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(campus, key, value)
+    await db.flush()
+    await db.refresh(campus)
+    return campus

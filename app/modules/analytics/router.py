@@ -56,3 +56,12 @@ async def get_employee_trends(
 ):
     """Get performance trend data for a specific employee over the last N periods."""
     return await service.employee_trends(db, employee_id=employee_id, periods=periods)
+
+
+@router.get("/dashboard")
+async def get_dashboard_summary(
+    current_user: User = Depends(require_perm("reports", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Combined dashboard stats: leads + attendance summary."""
+    return await service.dashboard_summary(db)

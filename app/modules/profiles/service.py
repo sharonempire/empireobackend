@@ -64,6 +64,18 @@ async def list_counselors_with_attendance(db: AsyncSession) -> list[dict]:
     return rows
 
 
+async def batch_get_profiles(
+    db: AsyncSession, profile_ids: list[UUID]
+) -> list[Profile]:
+    """Batch fetch profiles by IDs."""
+    if not profile_ids:
+        return []
+    result = await db.execute(
+        select(Profile).where(Profile.id.in_(profile_ids))
+    )
+    return result.scalars().all()
+
+
 async def get_profile_fcm_token(db: AsyncSession, profile_id: UUID) -> str | None:
     result = await db.execute(
         select(Profile.fcm_token).where(Profile.id == profile_id)

@@ -11,6 +11,7 @@ from app.modules.leads.schemas import (
     AssignmentTrackerOut,
     LeadCreate,
     LeadDetailOut,
+    LeadInfoBatchRequest,
     LeadInfoCreate,
     LeadInfoOut,
     LeadInfoUpdate,
@@ -37,10 +38,16 @@ async def api_list_leads(
     heat_status: str | None = None,
     lead_tab: str | None = None,
     assigned_to: str | None = None,
+    phone: str | None = Query(None, description="Filter by phone number"),
+    start_date: str | None = Query(None, description="Filter created_at >= ISO date"),
+    end_date: str | None = Query(None, description="Filter created_at <= ISO date"),
     current_user: User = Depends(require_perm("leads", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    items, total = await service.list_leads(db, page, size, search, status, heat_status, lead_tab, assigned_to)
+    items, total = await service.list_leads(
+        db, page, size, search, status, heat_status, lead_tab, assigned_to,
+        phone, start_date, end_date,
+    )
     return {**paginate_metadata(total, page, size), "items": items}
 
 
@@ -205,6 +212,22 @@ async def api_counselor_scores(
     return {"counselors": scores, "country_filter": countries}
 
 
+# ── Batch Lead Info ──────────────────────────────────────────────────
+
+
+@router.post("/info/batch", response_model=list[LeadInfoOut])
+async def api_batch_lead_info(
+    data: LeadInfoBatchRequest,
+    current_user: User = Depends(require_perm("leads", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch fetch lead_info records for multiple lead IDs (max 100)."""
+    if len(data.lead_ids) > 100:
+        from app.core.exceptions import BadRequestError
+        raise BadRequestError("Maximum 100 lead IDs per batch request")
+    return await service.batch_get_lead_infos(db, data.lead_ids)
+
+
 # ── Single Lead ──────────────────────────────────────────────────────
 
 
@@ -319,6 +342,22 @@ async def api_update_lead(
     await db.commit()
     await broadcast_table_change("leads", "UPDATE", lead_id, data.model_dump(exclude_unset=True))
     return lead
+
+
+# ── Delete Lead ──────────────────────────────────────────────────────
+
+
+@router.delete("/{lead_id}", status_code=204)
+async def api_delete_lead(
+    lead_id: int,
+    current_user: User = Depends(require_perm("leads", "delete")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a lead and its associated lead_info."""
+    await service.delete_lead(db, lead_id)
+    await log_event(db, "lead.deleted", current_user.id, "lead", str(lead_id), {})
+    await db.commit()
+    await broadcast_table_change("leads", "DELETE", lead_id, {})
 
 
 # ── Update Lead Info ─────────────────────────────────────────────────

@@ -15,6 +15,6 @@ class Event(Base):
     actor_type = Column(String(30), nullable=True)
     actor_id = Column(UUID(as_uuid=True), nullable=True)
     entity_type = Column(String(30), nullable=False)
-    entity_id = Column(UUID(as_uuid=True), nullable=True)
+    entity_id = Column(String(255), nullable=True)
     event_metadata = Column("metadata", JSONB, default=dict)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

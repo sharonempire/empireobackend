@@ -118,6 +118,7 @@ PERMISSIONS = [
     ("a0000001-0000-0000-0000-000000000019", "jobs", "read"),
     ("a0000001-0000-0000-0000-000000000020", "ig_sessions", "read"),
     ("a0000001-0000-0000-0000-000000000021", "ig_sessions", "update"),
+    ("a0000001-0000-0000-0000-000000000022", "analytics", "read"),
 ]
 
 # (id, email, full_name, department, is_active, legacy_supabase_id, phone, caller_id, location, countries_json)

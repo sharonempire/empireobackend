@@ -22,3 +22,33 @@ class IntakeOut(BaseModel):
     commission: Optional[Any] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class IntakeCreate(BaseModel):
+    name: str
+    start_date: date
+    end_date: date
+    application_deadline: date | None = None
+    description: str | None = None
+    universities: Any | None = None
+    courses: Any | None = None
+    requirements: Any | None = None
+    fees: Any | None = None
+    scholarships: Any | None = None
+    additional_info: Any | None = None
+    commission: Any | None = None
+
+
+class IntakeUpdate(BaseModel):
+    name: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    application_deadline: date | None = None
+    description: str | None = None
+    universities: Any | None = None
+    courses: Any | None = None
+    requirements: Any | None = None
+    fees: Any | None = None
+    scholarships: Any | None = None
+    additional_info: Any | None = None
+    commission: Any | None = None

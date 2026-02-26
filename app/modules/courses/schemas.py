@@ -123,3 +123,74 @@ class AppliedCourseOut(BaseModel):
 class AppliedCourseUpdate(BaseModel):
     status: str | None = None
     course_details: dict | None = None
+
+
+class CourseCreate(BaseModel):
+    program_name: str
+    university: str | None = None
+    country: str | None = None
+    city: str | None = None
+    campus: str | None = None
+    application_fee: str | None = None
+    tuition_fee: str | None = None
+    deposit_amount: str | None = None
+    currency: str | None = None
+    duration: str | None = None
+    language: str | None = None
+    study_type: str | None = None
+    program_level: str | None = None
+    english_proficiency: str | None = None
+    minimum_percentage: str | None = None
+    age_limit: str | None = None
+    academic_gap: str | None = None
+    max_backlogs: str | None = None
+    work_experience_requirement: str | None = None
+    required_subjects: str | None = None
+    intakes: str | None = None
+    links: str | None = None
+    media_links: str | None = None
+    course_description: str | None = None
+    special_requirements: str | None = None
+    field_of_study: str | None = None
+    commission: dict | list | int | float | str | None = None
+    domain: str | None = None
+    keywords: list[str] | None = None
+    approval_status: str | None = "pending"
+
+
+class CourseUpdate(BaseModel):
+    program_name: str | None = None
+    university: str | None = None
+    country: str | None = None
+    city: str | None = None
+    campus: str | None = None
+    application_fee: str | None = None
+    tuition_fee: str | None = None
+    deposit_amount: str | None = None
+    currency: str | None = None
+    duration: str | None = None
+    language: str | None = None
+    study_type: str | None = None
+    program_level: str | None = None
+    english_proficiency: str | None = None
+    minimum_percentage: str | None = None
+    age_limit: str | None = None
+    academic_gap: str | None = None
+    max_backlogs: str | None = None
+    work_experience_requirement: str | None = None
+    required_subjects: str | None = None
+    intakes: str | None = None
+    links: str | None = None
+    media_links: str | None = None
+    course_description: str | None = None
+    special_requirements: str | None = None
+    field_of_study: str | None = None
+    commission: dict | list | int | float | str | None = None
+    domain: str | None = None
+    keywords: list[str] | None = None
+    approval_status: str | None = None
+
+
+class CourseApprovalReview(BaseModel):
+    status: str  # "approved" or "rejected"
+    approved_detail: str | None = None
