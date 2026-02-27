@@ -91,6 +91,81 @@ async def check_out(db: AsyncSession, attendance_id: UUID) -> Attendance:
     return record
 
 
+async def check_out_by_employee(db: AsyncSession, employee_id: UUID) -> Attendance:
+    """Check out today's record for an employee (finds the open record)."""
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%A, %B %d, %Y")
+
+    result = await db.execute(
+        select(Attendance).where(
+            Attendance.employee_id == employee_id,
+            Attendance.date == today_str,
+            Attendance.checkoutat.is_(None),
+        )
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise NotFoundError("No open check-in found for today")
+    record.checkoutat = now.isoformat()
+    await db.flush()
+    await db.refresh(record)
+    return record
+
+
+async def ensure_today(db: AsyncSession, user_id: UUID) -> Attendance:
+    """Idempotent: create today's attendance record if missing, return existing if present."""
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%A, %B %d, %Y")
+
+    result = await db.execute(
+        select(Attendance).where(
+            Attendance.employee_id == user_id,
+            Attendance.date == today_str,
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        return existing
+
+    record = Attendance(
+        employee_id=user_id,
+        checkinat=now.isoformat(),
+        attendance_status="present",
+        date=today_str,
+    )
+    db.add(record)
+    await db.flush()
+    await db.refresh(record)
+    return record
+
+
+async def get_today_status(db: AsyncSession, user_id: UUID) -> Attendance | None:
+    """Get today's attendance record for a specific user."""
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%A, %B %d, %Y")
+
+    result = await db.execute(
+        select(Attendance).where(
+            Attendance.employee_id == user_id,
+            Attendance.date == today_str,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_history(
+    db: AsyncSession, user_id: UUID, page: int = 1, size: int = 20
+) -> tuple[list[Attendance], int]:
+    """Get attendance history for a specific user."""
+    stmt = select(Attendance).where(Attendance.employee_id == user_id)
+    count_stmt = select(func.count()).select_from(Attendance).where(Attendance.employee_id == user_id)
+
+    total = (await db.execute(count_stmt)).scalar()
+    stmt = stmt.order_by(Attendance.created_at.desc()).offset((page - 1) * size).limit(size)
+    result = await db.execute(stmt)
+    return result.scalars().all(), total
+
+
 async def get_today_present(db: AsyncSession) -> list[Attendance]:
     """Get all employees who are present today."""
     from sqlalchemy import text

@@ -40,16 +40,42 @@ async def api_read_all(
     return {"detail": "All notifications marked as read", "count": count}
 
 
+async def _mark_read(notification_id, current_user, db):
+    notification = await service.mark_one_read(db, notification_id, current_user.id)
+    await log_event(db, "notification.read", current_user.id, "notification", str(notification_id), {})
+    await db.commit()
+    return notification
+
+
 @router.patch("/{notification_id}/read", response_model=NotificationOut)
 async def api_read_one(
     notification_id: UUID,
     current_user: User = Depends(require_perm("notifications", "read")),
     db: AsyncSession = Depends(get_db),
 ):
-    notification = await service.mark_one_read(db, notification_id, current_user.id)
-    await log_event(db, "notification.read", current_user.id, "notification", str(notification_id), {})
+    return await _mark_read(notification_id, current_user, db)
+
+
+@router.put("/{notification_id}/read", response_model=NotificationOut)
+async def api_read_one_put(
+    notification_id: UUID,
+    current_user: User = Depends(require_perm("notifications", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """PUT alias for PATCH notification read."""
+    return await _mark_read(notification_id, current_user, db)
+
+
+@router.delete("/{notification_id}", status_code=204)
+async def api_delete_notification(
+    notification_id: UUID,
+    current_user: User = Depends(require_perm("notifications", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a notification."""
+    await service.delete_notification(db, notification_id, current_user.id)
+    await log_event(db, "notification.deleted", current_user.id, "notification", str(notification_id), {})
     await db.commit()
-    return notification
 
 
 @router.post("/send", response_model=NotificationOut, status_code=201)

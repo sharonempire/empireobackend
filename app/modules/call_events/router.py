@@ -5,7 +5,7 @@ from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.core.websocket import broadcast_table_change
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.call_events import service
 from app.modules.call_events.schemas import CallEventCreate, CallEventOut, CDRCreate, ClickToCallRequest
 from app.modules.users.models import User
@@ -23,7 +23,7 @@ async def api_list_call_events(
     call_uuid: str | None = None,
     agent_number: str | None = None,
     call_date: str | None = None,
-    current_user: User = Depends(require_perm("call_events", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     # Support both page/size and limit/offset patterns
@@ -39,7 +39,7 @@ async def api_list_call_events(
 @router.get("/stats")
 async def api_call_stats(
     employee_id: str | None = None,
-    current_user: User = Depends(require_perm("call_events", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Call event statistics — total, connected, avg duration, with recording."""
@@ -49,7 +49,7 @@ async def api_call_stats(
 @router.get("/{call_event_id}", response_model=CallEventOut)
 async def api_get_call_event(
     call_event_id: int,
-    current_user: User = Depends(require_perm("call_events", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_call_event(db, call_event_id)

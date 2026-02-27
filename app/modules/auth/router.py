@@ -25,6 +25,26 @@ from app.core.events import log_event
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+@router.get("/profile")
+async def get_profile(current_user: User = Depends(get_current_user)):
+    """Return the current user's profile info (used by Flutter frontend)."""
+    return {
+        "user_id": current_user.id,
+        "profile_id": current_user.legacy_supabase_id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "phone": current_user.phone,
+        "department": current_user.department,
+        "is_active": current_user.is_active,
+        "profile_picture": current_user.profile_picture,
+        "caller_id": current_user.caller_id,
+        "location": current_user.location,
+        "countries": current_user.countries,
+        "roles": current_user.roles,
+        "last_login_at": current_user.last_login_at,
+    }
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     # Basic per-IP rate limiting for login attempts

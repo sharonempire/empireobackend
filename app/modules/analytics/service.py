@@ -237,8 +237,13 @@ async def employee_trends(db: AsyncSession, employee_id: UUID, periods: int = 12
     ]
 
 
-async def dashboard_summary(db: AsyncSession) -> dict:
-    """Combined dashboard stats for the main dashboard."""
+async def dashboard_summary(db: AsyncSession, user_id: UUID | None = None, role: str | None = None) -> dict:
+    """Combined dashboard stats for the main dashboard.
+
+    Optional filters:
+    - user_id: scope lead stats to a specific assigned_to user
+    - role: scope lead stats to users with a specific role (e.g. counselor)
+    """
     from datetime import datetime, timedelta, timezone
     from app.modules.attendance.models import Attendance
     from app.modules.profiles.models import Profile
@@ -248,30 +253,59 @@ async def dashboard_summary(db: AsyncSession) -> dict:
     week_start = today_start - timedelta(days=today_start.weekday())
     month_start = today_start.replace(day=1)
 
+    # Build optional lead filter for user_id / role scoping
+    lead_filters = []
+    if user_id:
+        lead_filters.append(Lead.assigned_to == str(user_id))
+    elif role:
+        # Find all profile IDs with this role in eb_users, then filter leads by assigned_to
+        from app.modules.users.models import UserRole, Role as RoleModel
+        role_user_stmt = (
+            select(User.legacy_supabase_id)
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(RoleModel, RoleModel.id == UserRole.role_id)
+            .where(RoleModel.name == role)
+            .where(User.legacy_supabase_id.is_not(None))
+        )
+        role_result = await db.execute(role_user_stmt)
+        profile_ids = [str(r[0]) for r in role_result.all()]
+        if profile_ids:
+            lead_filters.append(Lead.assigned_to.in_(profile_ids))
+        else:
+            # No users with this role — return zeroed lead stats
+            lead_filters.append(Lead.id < 0)  # impossible condition
+
+    def _apply_lead_filters(stmt):
+        for f in lead_filters:
+            stmt = stmt.where(f)
+        return stmt
+
     # Lead stats
-    total_leads = (await db.execute(select(func.count()).select_from(Lead))).scalar()
-    fresh_leads = (await db.execute(
+    total_leads = (await db.execute(_apply_lead_filters(
+        select(func.count()).select_from(Lead)
+    ))).scalar()
+    fresh_leads = (await db.execute(_apply_lead_filters(
         select(func.count()).select_from(Lead).where(Lead.fresh.is_(True))
-    )).scalar()
+    ))).scalar()
     backlog_leads = (await db.execute(
         select(func.count()).select_from(Lead).where(Lead.assigned_to.is_(None))
     )).scalar()
 
     # Lead counts by time period
-    leads_today = (await db.execute(
+    leads_today = (await db.execute(_apply_lead_filters(
         select(func.count()).select_from(Lead).where(Lead.created_at >= today_start)
-    )).scalar()
-    leads_this_week = (await db.execute(
+    ))).scalar()
+    leads_this_week = (await db.execute(_apply_lead_filters(
         select(func.count()).select_from(Lead).where(Lead.created_at >= week_start)
-    )).scalar()
-    leads_this_month = (await db.execute(
+    ))).scalar()
+    leads_this_month = (await db.execute(_apply_lead_filters(
         select(func.count()).select_from(Lead).where(Lead.created_at >= month_start)
-    )).scalar()
+    ))).scalar()
 
     # Lead breakdown by status
-    status_result = await db.execute(
-        select(Lead.status, func.count()).group_by(Lead.status)
-    )
+    status_stmt = select(Lead.status, func.count()).group_by(Lead.status)
+    status_stmt = _apply_lead_filters(status_stmt)
+    status_result = await db.execute(status_stmt)
     by_status = {row[0] or "unset": row[1] for row in status_result.all()}
 
     # Attendance today

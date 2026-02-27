@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.profiles import service
 from app.modules.profiles.schemas import ProfileBatchRequest, ProfileOut, ProfileSummaryOut
 from app.modules.users.models import User
@@ -19,7 +19,7 @@ async def api_list_profiles(
     size: int = Query(20, ge=1, le=500),
     user_type: str | None = None,
     designation: str | None = None,
-    current_user: User = Depends(require_perm("profiles", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_profiles(db, page, size, user_type, designation)
@@ -29,7 +29,7 @@ async def api_list_profiles(
 @router.post("/batch", response_model=list[ProfileSummaryOut])
 async def api_batch_profiles(
     data: ProfileBatchRequest,
-    current_user: User = Depends(require_perm("profiles", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Batch fetch profile summaries by IDs (max 100)."""
@@ -41,7 +41,7 @@ async def api_batch_profiles(
 
 @router.get("/counselors")
 async def api_list_counselors(
-    current_user: User = Depends(require_perm("profiles", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """List counselors with today's attendance status."""
@@ -51,7 +51,7 @@ async def api_list_counselors(
 @router.get("/{profile_id}", response_model=ProfileOut)
 async def api_get_profile(
     profile_id: UUID,
-    current_user: User = Depends(require_perm("profiles", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a profile (also serves as mentor endpoint)."""
@@ -61,7 +61,7 @@ async def api_get_profile(
 @router.get("/{profile_id}/fcm-token")
 async def api_get_profile_fcm_token(
     profile_id: UUID,
-    current_user: User = Depends(require_perm("profiles", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get just the FCM token for a profile (for push notifications)."""

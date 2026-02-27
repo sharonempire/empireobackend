@@ -44,6 +44,7 @@ async def list_leads(
     phone: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    user_id: str | None = None,
 ) -> tuple[list, int]:
     from datetime import datetime as dt
 
@@ -84,6 +85,9 @@ async def list_leads(
     if assigned_to:
         stmt = stmt.where(Lead.assigned_to == assigned_to)
         count_stmt = count_stmt.where(Lead.assigned_to == assigned_to)
+    if user_id:
+        stmt = stmt.where(Lead.user_id == user_id)
+        count_stmt = count_stmt.where(Lead.user_id == user_id)
     if phone:
         # Match on normalized phone or raw phone
         phone_clean = phone.lstrip("+").replace(" ", "").replace("-", "")
@@ -585,3 +589,33 @@ async def count_leads(
     where = and_(*conditions) if conditions else True
     count_stmt = select(func.count()).select_from(Lead).where(where)
     return (await db.execute(count_stmt)).scalar()
+
+
+# ── Batch Profile Lookup ──────────────────────────────────────────────
+
+
+async def batch_get_profiles_by_user_ids(
+    db: AsyncSession, user_ids: list[str]
+) -> list[dict]:
+    """Batch fetch profiles by user_id strings (UUID strings from leadslist.user_id → profiles)."""
+    if not user_ids:
+        return []
+    from app.modules.profiles.models import Profile
+    result = await db.execute(
+        select(Profile).where(Profile.id.in_(user_ids))
+    )
+    profiles = result.scalars().all()
+    return [
+        {
+            "id": str(p.id),
+            "diplay_name": p.diplay_name,
+            "profilepicture": p.profilepicture,
+            "designation": p.designation,
+            "email": p.email,
+            "phone": p.phone,
+            "user_type": p.user_type,
+            "countries": p.countries,
+            "fcm_token": p.fcm_token,
+        }
+        for p in profiles
+    ]

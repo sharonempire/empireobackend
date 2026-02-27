@@ -192,5 +192,8 @@ class CourseUpdate(BaseModel):
 
 
 class CourseApprovalReview(BaseModel):
-    status: str  # "approved" or "rejected"
+    status: str | None = "approved"  # "approved" or "rejected"
     approved_detail: str | None = None
+    # Frontend compat: also accepts approver_name/approver_id
+    approver_name: str | None = None
+    approver_id: str | None = None

@@ -187,8 +187,16 @@ class AssignmentTrackerOut(BaseModel):
 
 
 class LeadInfoBatchRequest(BaseModel):
-    """Batch fetch lead_info for multiple leads."""
-    lead_ids: list[int]
+    """Batch fetch lead_info for multiple leads.
+    Accepts either {"ids": [...]} or {"lead_ids": [...]} for frontend compatibility.
+    """
+    ids: list[int] | None = None
+    lead_ids: list[int] | None = None
+
+
+class LeadProfileBatchRequest(BaseModel):
+    """Batch fetch profiles by user UUIDs."""
+    user_ids: list[str]
 
 
 class LeadIntake(BaseModel):

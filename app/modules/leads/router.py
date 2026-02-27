@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,7 +7,7 @@ from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.core.websocket import broadcast_table_change
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.leads import service
 from app.modules.leads.schemas import (
     AssignmentTrackerOut,
@@ -17,6 +19,7 @@ from app.modules.leads.schemas import (
     LeadInfoUpdate,
     LeadIntake,
     LeadOut,
+    LeadProfileBatchRequest,
     LeadReassign,
     LeadRedistribute,
     LeadUpdate,
@@ -38,15 +41,16 @@ async def api_list_leads(
     heat_status: str | None = None,
     lead_tab: str | None = None,
     assigned_to: str | None = None,
+    user_id: str | None = Query(None, description="Filter by user_id field"),
     phone: str | None = Query(None, description="Filter by phone number"),
     start_date: str | None = Query(None, description="Filter created_at >= ISO date"),
     end_date: str | None = Query(None, description="Filter created_at <= ISO date"),
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_leads(
         db, page, size, search, status, heat_status, lead_tab, assigned_to,
-        phone, start_date, end_date,
+        phone, start_date, end_date, user_id=user_id,
     )
     return {**paginate_metadata(total, page, size), "items": items}
 
@@ -58,7 +62,7 @@ async def api_list_leads(
 async def api_list_fresh_leads(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Fresh leads — new, uncontacted, no follow-up set."""
@@ -70,7 +74,7 @@ async def api_list_fresh_leads(
 async def api_list_backlog_leads(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Backlog leads — unassigned, waiting for staff check-in."""
@@ -84,7 +88,7 @@ async def api_list_bin_leads(
     size: int = Query(20, ge=1, le=500),
     start_date: str | None = None,
     end_date: str | None = None,
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Bin/trashed leads — office enquiry or lead trashed."""
@@ -100,7 +104,7 @@ async def api_list_follow_up_leads(
     start: str | None = Query(None, description="ISO date start"),
     end: str | None = Query(None, description="ISO date end"),
     lead_tab: str | None = None,
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Leads with follow_up date in range, excluding completed ones."""
@@ -116,7 +120,7 @@ async def api_list_new_enquiry_leads(
     start: str | None = Query(None, description="ISO date start"),
     end: str | None = Query(None, description="ISO date end"),
     lead_tab: str | None = None,
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Leads created in date range for a specific assignee."""
@@ -128,7 +132,7 @@ async def api_list_new_enquiry_leads(
 async def api_list_draft_leads(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=500),
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Leads with draft_status in (draft, DRAFT)."""
@@ -142,7 +146,7 @@ async def api_list_completed_leads(
     size: int = Query(20, ge=1, le=500),
     assigned_to: str | None = None,
     lead_tab: str | None = None,
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Leads with info_progress percentage = 100."""
@@ -155,7 +159,7 @@ async def api_list_study_abroad_leads(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=500),
     lead_tab: str | None = "student",
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Study abroad leads — excludes trashed statuses and bad lead types."""
@@ -169,7 +173,7 @@ async def api_lead_count(
     lead_tab: str | None = None,
     start: str | None = Query(None, description="ISO date start"),
     end: str | None = Query(None, description="ISO date end"),
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Count matching leads (for dashboard counters)."""
@@ -179,7 +183,7 @@ async def api_lead_count(
 
 @router.get("/stats")
 async def api_lead_stats(
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Quick stats: total, fresh, backlog, breakdown by heat/status."""
@@ -188,7 +192,7 @@ async def api_lead_stats(
 
 @router.get("/assignment-tracker", response_model=AssignmentTrackerOut)
 async def api_assignment_tracker(
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Current round-robin assignment tracker state."""
@@ -201,7 +205,7 @@ async def api_assignment_tracker(
 @router.get("/auto-assign/scores")
 async def api_counselor_scores(
     country_preference: str | None = Query(None, description="Comma-separated country names"),
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """View counselor scoring for auto-assignment debugging."""
@@ -215,17 +219,53 @@ async def api_counselor_scores(
 # ── Batch Lead Info ──────────────────────────────────────────────────
 
 
-@router.post("/info/batch", response_model=list[LeadInfoOut])
-async def api_batch_lead_info(
-    data: LeadInfoBatchRequest,
-    current_user: User = Depends(require_perm("leads", "read")),
-    db: AsyncSession = Depends(get_db),
-):
-    """Batch fetch lead_info records for multiple lead IDs (max 100)."""
-    if len(data.lead_ids) > 100:
+async def _batch_lead_info(data: LeadInfoBatchRequest, current_user, db):
+    """Shared handler for batch lead_info fetch."""
+    ids = data.ids or data.lead_ids or []
+    if len(ids) > 100:
         from app.core.exceptions import BadRequestError
         raise BadRequestError("Maximum 100 lead IDs per batch request")
-    return await service.batch_get_lead_infos(db, data.lead_ids)
+    return await service.batch_get_lead_infos(db, ids)
+
+
+@router.post("/batch-info", response_model=list[LeadInfoOut])
+async def api_batch_lead_info(
+    data: LeadInfoBatchRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch fetch lead_info records for multiple lead IDs (max 100).
+    Accepts body: {"ids": [1,2,3]} or {"lead_ids": [1,2,3]}
+    """
+    return await _batch_lead_info(data, current_user, db)
+
+
+@router.post("/info/batch", response_model=list[LeadInfoOut])
+async def api_batch_lead_info_legacy(
+    data: LeadInfoBatchRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Legacy path alias for /batch-info."""
+    return await _batch_lead_info(data, current_user, db)
+
+
+# ── Batch Profile Lookup ────────────────────────────────────────────
+
+
+@router.post("/batch-profiles")
+async def api_batch_lead_profiles(
+    data: LeadProfileBatchRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch fetch profiles for multiple user UUIDs (max 100).
+    Accepts body: {"user_ids": ["uuid1", "uuid2"]}
+    """
+    if len(data.user_ids) > 100:
+        from app.core.exceptions import BadRequestError
+        raise BadRequestError("Maximum 100 user IDs per batch request")
+    return await service.batch_get_profiles_by_user_ids(db, data.user_ids)
 
 
 # ── Single Lead ──────────────────────────────────────────────────────
@@ -234,7 +274,7 @@ async def api_batch_lead_info(
 @router.get("/{lead_id}", response_model=LeadDetailOut)
 async def api_get_lead(
     lead_id: int,
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     lead = await service.get_lead(db, lead_id)
@@ -251,7 +291,7 @@ async def api_get_lead(
 @router.get("/{lead_id}/info", response_model=LeadInfoOut)
 async def api_get_lead_info(
     lead_id: int,
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get standalone lead_info record for a lead."""
@@ -289,12 +329,11 @@ async def api_list_lead_applied_courses(
     lead_id: int,
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=500),
-    current_user: User = Depends(require_perm("leads", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Fetch courses applied by a lead."""
     from app.modules.courses import service as course_service
-    from app.modules.courses.schemas import AppliedCourseOut
 
     items, total = await course_service.list_applied_courses_for_lead(db, lead_id, page, size)
     return {**paginate_metadata(total, page, size), "items": items}
@@ -320,7 +359,16 @@ async def api_create_lead(
     return lead
 
 
-# ── Update Lead ──────────────────────────────────────────────────────
+# ── Update Lead (PATCH + PUT) ────────────────────────────────────────
+
+
+async def _update_lead(lead_id: int, data: LeadUpdate, current_user: User, db: AsyncSession):
+    """Shared handler for PATCH and PUT lead updates."""
+    lead = await service.update_lead(db, lead_id, data)
+    await log_event(db, "lead.updated", current_user.id, "lead", str(lead_id), data.model_dump(exclude_unset=True))
+    await db.commit()
+    await broadcast_table_change("leads", "UPDATE", lead_id, data.model_dump(exclude_unset=True))
+    return lead
 
 
 @router.patch("/{lead_id}", response_model=LeadOut)
@@ -330,18 +378,19 @@ async def api_update_lead(
     current_user: User = Depends(require_perm("leads", "update")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Partial update — only provided fields are changed.
-    Accepts: name, email, phone, status, heat_status, follow_up, remark,
-    assigned_to, lead_tab, country_preference, lead_type, documents_status,
-    call_summary, info_progress, draft_status, fresh, profile_image,
-    is_premium_jobs, is_premium_courses, is_resume_downloaded, is_registered,
-    finder_type, current_module, ig_handle, freelancer_manager, freelancer.
-    """
-    lead = await service.update_lead(db, lead_id, data)
-    await log_event(db, "lead.updated", current_user.id, "lead", str(lead_id), data.model_dump(exclude_unset=True))
-    await db.commit()
-    await broadcast_table_change("leads", "UPDATE", lead_id, data.model_dump(exclude_unset=True))
-    return lead
+    """Partial update — only provided fields are changed."""
+    return await _update_lead(lead_id, data, current_user, db)
+
+
+@router.put("/{lead_id}", response_model=LeadOut)
+async def api_update_lead_put(
+    lead_id: int,
+    data: LeadUpdate,
+    current_user: User = Depends(require_perm("leads", "update")),
+    db: AsyncSession = Depends(get_db),
+):
+    """PUT alias for PATCH — partial update, only provided fields are changed."""
+    return await _update_lead(lead_id, data, current_user, db)
 
 
 # ── Delete Lead ──────────────────────────────────────────────────────
@@ -360,16 +409,11 @@ async def api_delete_lead(
     await broadcast_table_change("leads", "DELETE", lead_id, {})
 
 
-# ── Update Lead Info ─────────────────────────────────────────────────
+# ── Update Lead Info (PATCH + PUT) ──────────────────────────────────
 
 
-@router.patch("/{lead_id}/info", response_model=LeadInfoOut)
-async def api_update_lead_info(
-    lead_id: int,
-    data: LeadInfoUpdate,
-    current_user: User = Depends(require_perm("leads", "update")),
-    db: AsyncSession = Depends(get_db),
-):
+async def _update_lead_info(lead_id: int, data: LeadInfoUpdate, current_user: User, db: AsyncSession):
+    """Shared handler for PATCH and PUT lead_info updates."""
     info = await service.update_lead_info(db, lead_id, data)
     await log_event(db, "lead_info.updated", current_user.id, "lead", str(lead_id), {
         "fields_updated": list(data.model_dump(exclude_unset=True).keys()),
@@ -379,6 +423,27 @@ async def api_update_lead_info(
         "fields_updated": list(data.model_dump(exclude_unset=True).keys()),
     })
     return info
+
+
+@router.patch("/{lead_id}/info", response_model=LeadInfoOut)
+async def api_update_lead_info(
+    lead_id: int,
+    data: LeadInfoUpdate,
+    current_user: User = Depends(require_perm("leads", "update")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_lead_info(lead_id, data, current_user, db)
+
+
+@router.put("/{lead_id}/info", response_model=LeadInfoOut)
+async def api_update_lead_info_put(
+    lead_id: int,
+    data: LeadInfoUpdate,
+    current_user: User = Depends(require_perm("leads", "update")),
+    db: AsyncSession = Depends(get_db),
+):
+    """PUT alias for PATCH lead_info update."""
+    return await _update_lead_info(lead_id, data, current_user, db)
 
 
 # ── Reassign Lead ────────────────────────────────────────────────────

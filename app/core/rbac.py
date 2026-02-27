@@ -1,12 +1,13 @@
 from fastapi import Depends
 
-from app.dependencies import require_perm
+from app.dependencies import get_current_user
 
 
 def include_router_with_default(app, router, prefix: str, resource: str):
-    """Include a router into the FastAPI app and attach a default 'read' permission
+    """Include a router into the FastAPI app with authentication required.
 
-    This applies a router-level dependency that requires `<resource>:read` for all
-    endpoints, unless an endpoint overrides with a more specific dependency.
+    All endpoints require a valid JWT (authenticated user). Individual
+    endpoints handle their own permission checks for write operations
+    via require_perm() where needed.
     """
-    app.include_router(router, prefix=prefix, dependencies=[Depends(require_perm(resource, "read"))])
+    app.include_router(router, prefix=prefix, dependencies=[Depends(get_current_user)])

@@ -59,17 +59,29 @@ async def api_create_country(
     return country
 
 
-@router.patch("/countries/{country_id}", response_model=CountryOut)
-async def api_update_country(
-    country_id: int,
-    data: CountryUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
-    db: AsyncSession = Depends(get_db),
-):
+async def _update_country(country_id, data, current_user, db):
     country = await service.update_country(db, country_id, data)
     await log_event(db, "geography.country_updated", current_user.id, "geography", str(country.id), {})
     await db.commit()
     return country
+
+
+@router.patch("/countries/{country_id}", response_model=CountryOut)
+async def api_update_country(
+    country_id: int, data: CountryUpdate,
+    current_user: User = Depends(require_perm("geography", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_country(country_id, data, current_user, db)
+
+
+@router.put("/countries/{country_id}", response_model=CountryOut)
+async def api_update_country_put(
+    country_id: int, data: CountryUpdate,
+    current_user: User = Depends(require_perm("geography", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_country(country_id, data, current_user, db)
 
 
 # ── Cities ───────────────────────────────────────────────────────────────────
@@ -107,17 +119,29 @@ async def api_create_city(
     return city
 
 
-@router.patch("/cities/{city_id}", response_model=CityOut)
-async def api_update_city(
-    city_id: int,
-    data: CityUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
-    db: AsyncSession = Depends(get_db),
-):
+async def _update_city(city_id, data, current_user, db):
     city = await service.update_city(db, city_id, data)
     await log_event(db, "geography.city_updated", current_user.id, "geography", str(city.id), {})
     await db.commit()
     return city
+
+
+@router.patch("/cities/{city_id}", response_model=CityOut)
+async def api_update_city(
+    city_id: int, data: CityUpdate,
+    current_user: User = Depends(require_perm("geography", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_city(city_id, data, current_user, db)
+
+
+@router.put("/cities/{city_id}", response_model=CityOut)
+async def api_update_city_put(
+    city_id: int, data: CityUpdate,
+    current_user: User = Depends(require_perm("geography", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_city(city_id, data, current_user, db)
 
 
 # ── Universities ─────────────────────────────────────────────────────────────
@@ -155,17 +179,29 @@ async def api_create_university(
     return university
 
 
-@router.patch("/universities/{university_id}", response_model=UniversityOut)
-async def api_update_university(
-    university_id: int,
-    data: UniversityUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
-    db: AsyncSession = Depends(get_db),
-):
+async def _update_university(university_id, data, current_user, db):
     university = await service.update_university(db, university_id, data)
     await log_event(db, "geography.university_updated", current_user.id, "geography", str(university.id), {})
     await db.commit()
     return university
+
+
+@router.patch("/universities/{university_id}", response_model=UniversityOut)
+async def api_update_university(
+    university_id: int, data: UniversityUpdate,
+    current_user: User = Depends(require_perm("geography", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_university(university_id, data, current_user, db)
+
+
+@router.put("/universities/{university_id}", response_model=UniversityOut)
+async def api_update_university_put(
+    university_id: int, data: UniversityUpdate,
+    current_user: User = Depends(require_perm("geography", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_university(university_id, data, current_user, db)
 
 
 # ── Campuses ─────────────────────────────────────────────────────────────────
@@ -203,14 +239,26 @@ async def api_create_campus(
     return campus
 
 
-@router.patch("/campuses/{campus_id}", response_model=CampusOut)
-async def api_update_campus(
-    campus_id: int,
-    data: CampusUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
-    db: AsyncSession = Depends(get_db),
-):
+async def _update_campus(campus_id, data, current_user, db):
     campus = await service.update_campus(db, campus_id, data)
     await log_event(db, "geography.campus_updated", current_user.id, "geography", str(campus.id), {})
     await db.commit()
     return campus
+
+
+@router.patch("/campuses/{campus_id}", response_model=CampusOut)
+async def api_update_campus(
+    campus_id: int, data: CampusUpdate,
+    current_user: User = Depends(require_perm("geography", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_campus(campus_id, data, current_user, db)
+
+
+@router.put("/campuses/{campus_id}", response_model=CampusOut)
+async def api_update_campus_put(
+    campus_id: int, data: CampusUpdate,
+    current_user: User = Depends(require_perm("geography", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_campus(campus_id, data, current_user, db)

@@ -55,6 +55,19 @@ async def mark_one_read(db: AsyncSession, notification_id: UUID, user_id: UUID) 
     return notification
 
 
+async def delete_notification(db: AsyncSession, notification_id: UUID, user_id: UUID) -> None:
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id, Notification.user_id == user_id
+        )
+    )
+    notification = result.scalar_one_or_none()
+    if not notification:
+        raise NotFoundError("Notification not found")
+    await db.delete(notification)
+    await db.flush()
+
+
 async def create_notification(
     db: AsyncSession,
     user_id: UUID,

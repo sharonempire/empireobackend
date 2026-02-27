@@ -51,21 +51,30 @@ async def api_create_intake(
     return intake
 
 
-@router.patch("/{intake_id}", response_model=IntakeOut)
-async def api_update_intake(
-    intake_id: int,
-    body: IntakeUpdate,
-    current_user: User = Depends(require_perm("intakes", "read")),
-    db: AsyncSession = Depends(get_db),
-):
+async def _update_intake(intake_id, body, current_user, db):
     intake = await service.update_intake(db, intake_id, body)
     await log_event(
-        db=db,
-        event_type="intake.updated",
-        actor_id=current_user.id,
-        entity_type="intake",
-        entity_id=intake.id,
-        metadata={"name": intake.name},
+        db=db, event_type="intake.updated", actor_id=current_user.id,
+        entity_type="intake", entity_id=intake.id, metadata={"name": intake.name},
     )
     await db.commit()
     return intake
+
+
+@router.patch("/{intake_id}", response_model=IntakeOut)
+async def api_update_intake(
+    intake_id: int, body: IntakeUpdate,
+    current_user: User = Depends(require_perm("intakes", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _update_intake(intake_id, body, current_user, db)
+
+
+@router.put("/{intake_id}", response_model=IntakeOut)
+async def api_update_intake_put(
+    intake_id: int, body: IntakeUpdate,
+    current_user: User = Depends(require_perm("intakes", "read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """PUT alias for PATCH intake update."""
+    return await _update_intake(intake_id, body, current_user, db)
