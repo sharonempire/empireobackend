@@ -6,9 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.chat import service
-from app.modules.chat.schemas import ChatConversationOut, ChatMessageCreate, ChatMessageOut
+from app.modules.chat.schemas import (
+    ChatConversationOut,
+    ChatConversationUpdate,
+    ChatMarkReadRequest,
+    ChatMessageCreate,
+    ChatMessageOut,
+)
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -20,7 +26,7 @@ async def api_list_conversations(
     size: int = Query(20, ge=1, le=500),
     counselor_id: str | None = None,
     lead_uuid: str | None = None,
-    current_user: User = Depends(require_perm("chat", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_conversations(db, page, size, counselor_id, lead_uuid)
@@ -30,10 +36,23 @@ async def api_list_conversations(
 @router.get("/conversations/{conversation_id}", response_model=ChatConversationOut)
 async def api_get_conversation(
     conversation_id: UUID,
-    current_user: User = Depends(require_perm("chat", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_conversation(db, conversation_id)
+
+
+@router.patch("/conversations/{conversation_id}", response_model=ChatConversationOut)
+async def api_update_conversation(
+    conversation_id: UUID,
+    data: ChatConversationUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update conversation metadata (last_message_id, unread counts)."""
+    conv = await service.update_conversation(db, conversation_id, data)
+    await db.commit()
+    return conv
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=PaginatedResponse[ChatMessageOut])
@@ -41,7 +60,7 @@ async def api_list_messages(
     conversation_id: UUID,
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=500),
-    current_user: User = Depends(require_perm("chat", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_messages(db, conversation_id, page, size)
@@ -69,11 +88,23 @@ async def api_send_message(
 @router.post("/conversations/{conversation_id}/read")
 async def api_mark_read(
     conversation_id: UUID,
-    current_user: User = Depends(require_perm("chat", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Mark all messages in a conversation as read."""
     count = await service.mark_messages_read(db, conversation_id, str(current_user.id))
+    await db.commit()
+    return {"marked_read": count}
+
+
+@router.patch("/messages/read")
+async def api_mark_messages_read(
+    data: ChatMarkReadRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark all messages in a conversation as read (alternative path)."""
+    count = await service.mark_messages_read(db, data.conversation_id, data.reader_id)
     await db.commit()
     return {"marked_read": count}
 

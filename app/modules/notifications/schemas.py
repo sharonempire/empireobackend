@@ -26,3 +26,11 @@ class NotificationSend(BaseModel):
     title: str
     body: str
     data: dict | None = None
+
+
+class PushNotificationRequest(BaseModel):
+    """Direct FCM push by token (replaces Supabase Edge Function)."""
+    fcm_token: str
+    title: str
+    body: str
+    data: dict | None = None

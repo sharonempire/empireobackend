@@ -13,6 +13,8 @@ from app.modules.auth.schemas import (
     ChangePasswordRequest,
     LoginRequest,
     LoginResponse,
+    OTPSendRequest,
+    OTPVerifyRequest,
     RefreshRequest,
     TokenResponse,
 )
@@ -241,3 +243,113 @@ async def admin_reset_password(
     await db.commit()
 
     return {"ok": True, "email": user.email}
+
+
+# ── OTP (via Supabase Auth) ─────────────────────────────────────────
+
+
+@router.post("/otp/send")
+async def otp_send(data: OTPSendRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Send OTP via Supabase Auth (phone SMS or email).
+
+    Provide either `phone` (E.164 format, e.g. +918129130745) or `email`.
+    Requires Supabase phone provider configured for SMS OTP.
+    """
+    if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
+        raise HTTPException(status_code=501, detail="OTP not configured (missing SUPABASE_URL or SUPABASE_ANON_KEY)")
+
+    if not data.phone and not data.email:
+        raise HTTPException(status_code=400, detail="Provide either phone or email")
+
+    ip = request.client.host if request.client else "unknown"
+    key = f"rate:auth:otp_send:{ip}"
+    rem = await limit_key(key, limit=5, period_seconds=60)
+    if rem is not None and rem < 0:
+        raise HTTPException(status_code=429, detail="Too many OTP requests, try again later")
+
+    from app.core.otp_service import send_phone_otp, send_email_otp
+
+    if data.phone:
+        result = await send_phone_otp(data.phone)
+    else:
+        result = await send_email_otp(data.email)
+
+    if not result["ok"]:
+        await log_event(db, "auth.otp_send_failed", actor_id=None, entity_type="otp",
+                        entity_id=None, metadata={"phone": data.phone, "email": data.email, "ip": ip, "error": result.get("error")})
+        await db.commit()
+        raise HTTPException(status_code=400, detail=result.get("error", "Failed to send OTP"))
+
+    await log_event(db, "auth.otp_sent", actor_id=None, entity_type="otp",
+                    entity_id=None, metadata={"phone": data.phone, "email": data.email, "ip": ip})
+    await db.commit()
+    return {"ok": True, "message": result["message"]}
+
+
+@router.post("/otp/verify", response_model=LoginResponse)
+async def otp_verify(data: OTPVerifyRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Verify OTP and issue JWT tokens.
+
+    On success, looks up the user in eb_users by phone or email,
+    and returns the same response as /login (access_token, refresh_token, user info).
+    """
+    if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
+        raise HTTPException(status_code=501, detail="OTP not configured (missing SUPABASE_URL or SUPABASE_ANON_KEY)")
+
+    if not data.phone and not data.email:
+        raise HTTPException(status_code=400, detail="Provide either phone or email")
+
+    ip = request.client.host if request.client else "unknown"
+    key = f"rate:auth:otp_verify:{ip}"
+    rem = await limit_key(key, limit=10, period_seconds=60)
+    if rem is not None and rem < 0:
+        raise HTTPException(status_code=429, detail="Too many OTP verification attempts, try again later")
+
+    from app.core.otp_service import verify_phone_otp, verify_email_otp
+
+    if data.phone:
+        result = await verify_phone_otp(data.phone, data.otp_code)
+    else:
+        result = await verify_email_otp(data.email, data.otp_code)
+
+    if not result["ok"]:
+        await log_event(db, "auth.otp_verify_failed", actor_id=None, entity_type="otp",
+                        entity_id=None, metadata={"phone": data.phone, "email": data.email, "ip": ip})
+        await db.commit()
+        raise HTTPException(status_code=401, detail=result.get("error", "Invalid OTP"))
+
+    # OTP verified — now find the user in eb_users
+    if data.phone:
+        # Strip leading + and country code variations for flexible matching
+        phone_raw = data.phone.lstrip("+")
+        # Try matching phone field (may store with or without country code)
+        user = (await db.execute(
+            select(User).where(
+                (User.phone == data.phone) | (User.phone == phone_raw) |
+                (User.phone == phone_raw[-10:])  # last 10 digits
+            )
+        )).scalar_one_or_none()
+    else:
+        user = (await db.execute(
+            select(User).where(User.email == data.email)
+        )).scalar_one_or_none()
+
+    if not user or not user.is_active:
+        await log_event(db, "auth.otp_user_not_found", actor_id=None, entity_type="otp",
+                        entity_id=None, metadata={"phone": data.phone, "email": data.email, "ip": ip})
+        await db.commit()
+        raise HTTPException(status_code=404, detail="OTP verified but no matching user account found")
+
+    # Issue our own JWT tokens (same as /login)
+    tokens = await auth_service.issue_tokens(db, user, user_agent=request.headers.get("user-agent"), ip_address=ip)
+    await log_event(db, "auth.otp_login", actor_id=user.id, entity_type="user",
+                    entity_id=user.id, metadata={"method": "phone" if data.phone else "email", "ip": ip})
+    await db.commit()
+    return {
+        **tokens,
+        "user_id": user.id,
+        "profile_id": user.legacy_supabase_id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "roles": user.roles,
+    }

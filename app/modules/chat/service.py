@@ -60,6 +60,19 @@ async def list_messages(
     return result.scalars().all(), total
 
 
+async def update_conversation(db: AsyncSession, conversation_id: UUID, data) -> ChatConversation:
+    result = await db.execute(
+        select(ChatConversation).where(ChatConversation.id == conversation_id)
+    )
+    conversation = result.scalar_one_or_none()
+    if not conversation:
+        raise NotFoundError("Conversation not found")
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(conversation, field, value)
+    await db.flush()
+    return conversation
+
+
 async def send_message(db: AsyncSession, data: dict) -> ChatMessage:
     """Send a chat message. DB trigger `update_conversation_on_message`
     auto-updates the conversation's last_message_text, last_message_at,
@@ -75,14 +88,23 @@ async def send_message(db: AsyncSession, data: dict) -> ChatMessage:
 async def mark_messages_read(
     db: AsyncSession, conversation_id: UUID, user_id: str
 ) -> int:
-    """Mark all messages in a conversation as read using DB function."""
-    from sqlalchemy import text
+    """Mark all unread messages in a conversation as read for a given user."""
+    from datetime import datetime, timezone
 
-    result = await db.execute(
-        text("SELECT mark_messages_as_read(:conv_id, :user_id)"),
-        {"conv_id": conversation_id, "user_id": user_id},
+    from sqlalchemy import update
+
+    now = datetime.now(timezone.utc)
+    stmt = (
+        update(ChatMessage)
+        .where(
+            ChatMessage.conversation_id == conversation_id,
+            ChatMessage.receiver_id == user_id,
+            ChatMessage.is_read != True,  # noqa: E712
+        )
+        .values(is_read=True, read_at=now)
     )
-    return result.scalar() or 0
+    result = await db.execute(stmt)
+    return result.rowcount
 
 
 async def get_or_create_conversation(

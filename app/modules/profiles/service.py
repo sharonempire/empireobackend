@@ -1,4 +1,4 @@
-"""Profiles service layer (legacy read-only)."""
+"""Profiles service layer."""
 
 from uuid import UUID
 
@@ -15,6 +15,7 @@ async def list_profiles(
     size: int = 20,
     user_type: str | None = None,
     designation: str | None = None,
+    email: str | None = None,
 ) -> tuple[list[Profile], int]:
     stmt = select(Profile)
     count_stmt = select(func.count()).select_from(Profile)
@@ -25,6 +26,9 @@ async def list_profiles(
     if designation:
         stmt = stmt.where(Profile.designation == designation)
         count_stmt = count_stmt.where(Profile.designation == designation)
+    if email:
+        stmt = stmt.where(Profile.email == email)
+        count_stmt = count_stmt.where(Profile.email == email)
 
     total = (await db.execute(count_stmt)).scalar()
     stmt = stmt.offset((page - 1) * size).limit(size).order_by(Profile.diplay_name)
@@ -74,6 +78,32 @@ async def batch_get_profiles(
         select(Profile).where(Profile.id.in_(profile_ids))
     )
     return result.scalars().all()
+
+
+async def create_profile(db: AsyncSession, data) -> Profile:
+    profile = Profile(**data.model_dump(exclude_unset=True))
+    db.add(profile)
+    await db.flush()
+    await db.refresh(profile)
+    return profile
+
+
+async def profile_exists_by_email(db: AsyncSession, email: str) -> bool:
+    result = await db.execute(
+        select(func.count()).select_from(Profile).where(Profile.email == email)
+    )
+    return (result.scalar() or 0) > 0
+
+
+async def update_profile(db: AsyncSession, profile_id: UUID, data) -> Profile:
+    result = await db.execute(select(Profile).where(Profile.id == profile_id))
+    profile = result.scalar_one_or_none()
+    if not profile:
+        raise NotFoundError("Profile not found")
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(profile, field, value)
+    await db.flush()
+    return profile
 
 
 async def get_profile_fcm_token(db: AsyncSession, profile_id: UUID) -> str | None:

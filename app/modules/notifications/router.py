@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.notifications import service
-from app.modules.notifications.schemas import NotificationOut, NotificationSend
+from app.modules.notifications.schemas import NotificationOut, NotificationSend, PushNotificationRequest
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -20,7 +20,7 @@ async def api_list_notifications(
     size: int = Query(20, ge=1, le=500),
     is_read: bool | None = None,
     user_id: UUID | None = None,
-    current_user: User = Depends(require_perm("notifications", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     # Allow filtering by user_id (admin use), otherwise default to current user
@@ -31,7 +31,7 @@ async def api_list_notifications(
 
 @router.post("/read-all", response_model=None)
 async def api_read_all(
-    current_user: User = Depends(require_perm("notifications", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     count = await service.mark_all_read(db, current_user.id)
@@ -50,7 +50,7 @@ async def _mark_read(notification_id, current_user, db):
 @router.patch("/{notification_id}/read", response_model=NotificationOut)
 async def api_read_one(
     notification_id: UUID,
-    current_user: User = Depends(require_perm("notifications", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await _mark_read(notification_id, current_user, db)
@@ -59,7 +59,7 @@ async def api_read_one(
 @router.put("/{notification_id}/read", response_model=NotificationOut)
 async def api_read_one_put(
     notification_id: UUID,
-    current_user: User = Depends(require_perm("notifications", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """PUT alias for PATCH notification read."""
@@ -69,7 +69,7 @@ async def api_read_one_put(
 @router.delete("/{notification_id}", status_code=204)
 async def api_delete_notification(
     notification_id: UUID,
-    current_user: User = Depends(require_perm("notifications", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a notification."""
@@ -115,3 +115,24 @@ async def api_send_notification(
     })
     await db.commit()
     return notification
+
+
+@router.post("/push")
+async def api_push_notification(
+    data: PushNotificationRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Direct FCM push by token (replaces Supabase Edge Function).
+
+    Sends push notification directly to a device via FCM token.
+    No in-app notification record is created.
+    """
+    from app.core.fcm_service import send_push_notification
+
+    result = await send_push_notification(
+        fcm_token=data.fcm_token,
+        title=data.title,
+        body=data.body,
+        data=data.data,
+    )
+    return result

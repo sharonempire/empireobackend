@@ -35,7 +35,7 @@ router = APIRouter(prefix="/leads", tags=["Leads"])
 @router.get("/", response_model=PaginatedResponse[LeadOut])
 async def api_list_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=500),
+    size: int = Query(20, ge=1, le=10000),
     search: str | None = None,
     status: str | None = None,
     heat_status: str | None = None,

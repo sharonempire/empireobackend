@@ -41,6 +41,13 @@ class ChatMessageOut(BaseModel):
     receiver_id: Optional[str] = None
 
 
+class ChatConversationUpdate(BaseModel):
+    last_message_id: Optional[str] = None
+    last_message_text: Optional[str] = None
+    unread_count_assigned: Optional[int] = None
+    unread_count_user: Optional[int] = None
+
+
 class ChatMessageCreate(BaseModel):
     conversation_id: UUID
     sender_id: str
@@ -49,3 +56,13 @@ class ChatMessageCreate(BaseModel):
     voice_duration: Optional[int] = None
     course_id: Optional[str] = None
     course_deatails: Optional[Any] = None
+    receiver_id: Optional[str] = None
+    file_url: Optional[str] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    message_text: Optional[str] = None
+
+
+class ChatMarkReadRequest(BaseModel):
+    conversation_id: UUID
+    reader_id: str

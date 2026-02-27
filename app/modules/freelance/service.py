@@ -33,6 +33,13 @@ async def get_freelancer(db: AsyncSession, freelancer_id: int) -> Freelancer:
     return item
 
 
+async def batch_get_freelancers(db: AsyncSession, ids: list[int]) -> list[Freelancer]:
+    if not ids:
+        return []
+    result = await db.execute(select(Freelancer).where(Freelancer.id.in_(ids)))
+    return result.scalars().all()
+
+
 async def create_freelancer(db: AsyncSession, data: FreelancerCreate, creator_id: UUID) -> Freelancer:
     item = Freelancer(**data.model_dump(), creator_id=creator_id)
     db.add(item)
@@ -64,6 +71,13 @@ async def get_manager(db: AsyncSession, manager_id: int) -> FreelanceManager:
     if not item:
         raise NotFoundError("Freelance manager not found")
     return item
+
+
+async def batch_get_managers(db: AsyncSession, ids: list[int]) -> list[FreelanceManager]:
+    if not ids:
+        return []
+    result = await db.execute(select(FreelanceManager).where(FreelanceManager.id.in_(ids)))
+    return result.scalars().all()
 
 
 async def create_manager(db: AsyncSession, data: FreelanceManagerCreate) -> FreelanceManager:

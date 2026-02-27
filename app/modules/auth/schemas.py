@@ -42,3 +42,16 @@ class BootstrapRequest(BaseModel):
 class AdminResetPasswordRequest(BaseModel):
     email: EmailStr
     new_password: str
+
+
+class OTPSendRequest(BaseModel):
+    """Send OTP — provide either phone (E.164) or email."""
+    phone: str | None = None
+    email: EmailStr | None = None
+
+
+class OTPVerifyRequest(BaseModel):
+    """Verify OTP — provide the same identifier used in send + the OTP code."""
+    phone: str | None = None
+    email: EmailStr | None = None
+    otp_code: str

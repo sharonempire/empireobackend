@@ -1,10 +1,11 @@
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.freelance import service
 from app.modules.freelance.schemas import (
     AgentEndpointOut,
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/freelance", tags=["Freelance"])
 
 @router.get("/commissions", response_model=list[CommissionOut])
 async def api_list_commissions(
-    current_user: User = Depends(require_perm("freelance", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.list_commissions(db)
@@ -37,7 +38,7 @@ async def api_list_commissions(
 async def api_list_freelancers(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    current_user: User = Depends(require_perm("freelance", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_freelancers(db, page, size)
@@ -47,10 +48,27 @@ async def api_list_freelancers(
 @router.get("/freelancers/{freelancer_id}", response_model=FreelancerOut)
 async def api_get_freelancer(
     freelancer_id: int,
-    current_user: User = Depends(require_perm("freelance", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_freelancer(db, freelancer_id)
+
+
+class FreelancerBatchRequest(BaseModel):
+    ids: list[int]
+
+
+@router.post("/freelancers/batch", response_model=list[FreelancerOut])
+async def api_batch_freelancers(
+    data: FreelancerBatchRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch fetch freelancers by IDs (max 100)."""
+    if len(data.ids) > 100:
+        from app.core.exceptions import BadRequestError
+        raise BadRequestError("Maximum 100 IDs per batch request")
+    return await service.batch_get_freelancers(db, data.ids)
 
 
 @router.post("/freelancers", response_model=FreelancerOut, status_code=201)
@@ -84,7 +102,7 @@ async def api_update_freelancer(
 async def api_list_managers(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    current_user: User = Depends(require_perm("freelance", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_managers(db, page, size)
@@ -94,10 +112,27 @@ async def api_list_managers(
 @router.get("/managers/{manager_id}", response_model=FreelanceManagerOut)
 async def api_get_manager(
     manager_id: int,
-    current_user: User = Depends(require_perm("freelance", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_manager(db, manager_id)
+
+
+class ManagerBatchRequest(BaseModel):
+    ids: list[int]
+
+
+@router.post("/managers/batch", response_model=list[FreelanceManagerOut])
+async def api_batch_managers(
+    data: ManagerBatchRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch fetch freelance managers by IDs (max 100)."""
+    if len(data.ids) > 100:
+        from app.core.exceptions import BadRequestError
+        raise BadRequestError("Maximum 100 IDs per batch request")
+    return await service.batch_get_managers(db, data.ids)
 
 
 @router.post("/managers", response_model=FreelanceManagerOut, status_code=201)
@@ -129,7 +164,7 @@ async def api_update_manager(
 
 @router.get("/agent-endpoints", response_model=list[AgentEndpointOut])
 async def api_list_agent_endpoints(
-    current_user: User = Depends(require_perm("freelance", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.list_agent_endpoints(db)

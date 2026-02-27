@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     BOOTSTRAP_TOKEN: str = ""
 
+    SUPABASE_URL: str = ""        # e.g. https://ebgzlzemrargfahwokti.supabase.co
+    SUPABASE_ANON_KEY: str = ""    # Public anon key from Supabase dashboard
+
     OPENAI_API_KEY: str = ""
     SENDGRID_API_KEY: str = ""
     GOOGLE_SERVICE_ACCOUNT_KEY: str = ""  # Path to SA JSON or inline JSON string
