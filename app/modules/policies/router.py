@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.policies import service
 from app.modules.policies.schemas import PolicyCreate, PolicyOut, PolicyUpdate
 from app.modules.users.models import User
@@ -21,7 +21,7 @@ async def api_list_policies(
     category: str | None = None,
     department: str | None = None,
     is_active: bool | None = None,
-    current_user: User = Depends(require_perm("policies", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_policies(db, page, size, category, department, is_active)
@@ -31,7 +31,7 @@ async def api_list_policies(
 @router.get("/{policy_id}", response_model=PolicyOut)
 async def api_get_policy(
     policy_id: UUID,
-    current_user: User = Depends(require_perm("policies", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_policy(db, policy_id)

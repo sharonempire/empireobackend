@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.geography import service
 from app.modules.geography.schemas import (
     CampusCreate,
@@ -31,7 +31,7 @@ router = APIRouter(prefix="/geography", tags=["Geography"])
 async def api_list_countries(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_countries(db, page, size)
@@ -41,7 +41,7 @@ async def api_list_countries(
 @router.get("/countries/{country_id}", response_model=CountryOut)
 async def api_get_country(
     country_id: int,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_country(db, country_id)
@@ -50,7 +50,7 @@ async def api_get_country(
 @router.post("/countries", response_model=CountryOut, status_code=201)
 async def api_create_country(
     data: CountryCreate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     country = await service.create_country(db, data)
@@ -69,7 +69,7 @@ async def _update_country(country_id, data, current_user, db):
 @router.patch("/countries/{country_id}", response_model=CountryOut)
 async def api_update_country(
     country_id: int, data: CountryUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await _update_country(country_id, data, current_user, db)
@@ -78,7 +78,7 @@ async def api_update_country(
 @router.put("/countries/{country_id}", response_model=CountryOut)
 async def api_update_country_put(
     country_id: int, data: CountryUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await _update_country(country_id, data, current_user, db)
@@ -91,7 +91,7 @@ async def api_list_cities(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
     country_id: int | None = None,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_cities(db, page, size, country_id)
@@ -101,7 +101,7 @@ async def api_list_cities(
 @router.get("/cities/{city_id}", response_model=CityOut)
 async def api_get_city(
     city_id: int,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_city(db, city_id)
@@ -110,7 +110,7 @@ async def api_get_city(
 @router.post("/cities", response_model=CityOut, status_code=201)
 async def api_create_city(
     data: CityCreate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     city = await service.create_city(db, data)
@@ -129,7 +129,7 @@ async def _update_city(city_id, data, current_user, db):
 @router.patch("/cities/{city_id}", response_model=CityOut)
 async def api_update_city(
     city_id: int, data: CityUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await _update_city(city_id, data, current_user, db)
@@ -138,7 +138,7 @@ async def api_update_city(
 @router.put("/cities/{city_id}", response_model=CityOut)
 async def api_update_city_put(
     city_id: int, data: CityUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await _update_city(city_id, data, current_user, db)
@@ -151,7 +151,7 @@ async def api_list_universities(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
     city_id: int | None = None,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_universities(db, page, size, city_id)
@@ -161,7 +161,7 @@ async def api_list_universities(
 @router.get("/universities/{university_id}", response_model=UniversityOut)
 async def api_get_university(
     university_id: int,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_university(db, university_id)
@@ -170,7 +170,7 @@ async def api_get_university(
 @router.post("/universities", response_model=UniversityOut, status_code=201)
 async def api_create_university(
     data: UniversityCreate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     university = await service.create_university(db, data)
@@ -189,7 +189,7 @@ async def _update_university(university_id, data, current_user, db):
 @router.patch("/universities/{university_id}", response_model=UniversityOut)
 async def api_update_university(
     university_id: int, data: UniversityUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await _update_university(university_id, data, current_user, db)
@@ -198,7 +198,7 @@ async def api_update_university(
 @router.put("/universities/{university_id}", response_model=UniversityOut)
 async def api_update_university_put(
     university_id: int, data: UniversityUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await _update_university(university_id, data, current_user, db)
@@ -211,7 +211,7 @@ async def api_list_campuses(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
     university_id: int | None = None,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_campuses(db, page, size, university_id)
@@ -221,7 +221,7 @@ async def api_list_campuses(
 @router.get("/campuses/{campus_id}", response_model=CampusOut)
 async def api_get_campus(
     campus_id: int,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_campus(db, campus_id)
@@ -230,7 +230,7 @@ async def api_get_campus(
 @router.post("/campuses", response_model=CampusOut, status_code=201)
 async def api_create_campus(
     data: CampusCreate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     campus = await service.create_campus(db, data)
@@ -249,7 +249,7 @@ async def _update_campus(campus_id, data, current_user, db):
 @router.patch("/campuses/{campus_id}", response_model=CampusOut)
 async def api_update_campus(
     campus_id: int, data: CampusUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await _update_campus(campus_id, data, current_user, db)
@@ -258,7 +258,7 @@ async def api_update_campus(
 @router.put("/campuses/{campus_id}", response_model=CampusOut)
 async def api_update_campus_put(
     campus_id: int, data: CampusUpdate,
-    current_user: User = Depends(require_perm("geography", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await _update_campus(campus_id, data, current_user, db)

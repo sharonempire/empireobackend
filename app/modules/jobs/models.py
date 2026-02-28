@@ -3,7 +3,6 @@ import uuid
 from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-from app.core.enums import ApplicationStatusEnum
 from app.database import Base
 
 
@@ -30,7 +29,7 @@ class Job(Base):
     required_qualification = Column(JSONB, nullable=True)
     status = Column(Text, nullable=True)
     job_profile_id = Column(BigInteger, ForeignKey("job_profiles.id"), nullable=True)
-    application_status = Column(ApplicationStatusEnum, nullable=True)
+    application_status = Column(Text, nullable=True)
 
 
 class JobCountry(Base):

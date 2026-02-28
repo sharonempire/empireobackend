@@ -43,8 +43,8 @@ async def _load_search_config(db: AsyncSession) -> None:
     syn_result = await db.execute(select(SearchSynonym))
     _synonym_map = {}
     for row in syn_result.scalars().all():
-        if row.term and row.synonyms:
-            _synonym_map[row.term.lower()] = [s.lower() for s in row.synonyms]
+        if row.trigger and row.expansion:
+            _synonym_map[row.trigger.lower()] = [s.strip().lower() for s in row.expansion.split(",")]
 
     stop_result = await db.execute(select(Stopword))
     _stopwords = {row.word.lower() for row in stop_result.scalars().all() if row.word}

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.employee_automation import service
 from app.modules.employee_automation.schemas import (
     CallAnalysisCreate,
@@ -45,7 +45,7 @@ async def api_list_file_ingestions(
     size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     processing_status: str | None = None,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_file_ingestions(db, page, size, employee_id, processing_status)
@@ -55,7 +55,7 @@ async def api_list_file_ingestions(
 @router.get("/file-ingestions/{ingestion_id}", response_model=FileIngestionOut)
 async def api_get_file_ingestion(
     ingestion_id: UUID,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_file_ingestion(db, ingestion_id)
@@ -82,7 +82,7 @@ async def api_list_call_analyses(
     size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     transcription_status: str | None = None,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_call_analyses(db, page, size, employee_id, transcription_status)
@@ -92,7 +92,7 @@ async def api_list_call_analyses(
 @router.get("/call-analyses/{analysis_id}", response_model=CallAnalysisOut)
 async def api_get_call_analysis(
     analysis_id: UUID,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_call_analysis(db, analysis_id)
@@ -119,7 +119,7 @@ async def api_list_employee_metrics(
     size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     period_type: str | None = None,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_employee_metrics(db, page, size, employee_id, period_type)
@@ -129,7 +129,7 @@ async def api_list_employee_metrics(
 @router.get("/metrics/{metric_id}", response_model=EmployeeMetricOut)
 async def api_get_employee_metric(
     metric_id: UUID,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_employee_metric(db, metric_id)
@@ -143,7 +143,7 @@ async def api_list_performance_reviews(
     size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     status: str | None = None,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_performance_reviews(db, page, size, employee_id, status)
@@ -153,7 +153,7 @@ async def api_list_performance_reviews(
 @router.get("/reviews/{review_id}", response_model=PerformanceReviewOut)
 async def api_get_performance_review(
     review_id: UUID,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_performance_review(db, review_id)
@@ -194,7 +194,7 @@ async def api_list_employee_goals(
     size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     status: str | None = None,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_employee_goals(db, page, size, employee_id, status)
@@ -204,7 +204,7 @@ async def api_list_employee_goals(
 @router.get("/goals/{goal_id}", response_model=EmployeeGoalOut)
 async def api_get_employee_goal(
     goal_id: UUID,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_employee_goal(db, goal_id)
@@ -245,7 +245,7 @@ async def api_list_work_logs(
     size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     activity_type: str | None = None,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_work_logs(db, page, size, employee_id, activity_type)
@@ -273,7 +273,7 @@ async def api_list_employee_patterns(
     size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     is_active: bool | None = None,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_employee_patterns(db, page, size, employee_id, is_active)
@@ -288,7 +288,7 @@ async def api_list_employee_schedules(
     size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     status: str | None = None,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_employee_schedules(db, page, size, employee_id, status)
@@ -298,7 +298,7 @@ async def api_list_employee_schedules(
 @router.get("/schedules/{schedule_id}", response_model=EmployeeScheduleOut)
 async def api_get_employee_schedule(
     schedule_id: UUID,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_employee_schedule(db, schedule_id)
@@ -339,7 +339,7 @@ async def api_list_training_records(
     size: int = Query(20, ge=1, le=500),
     employee_id: UUID | None = None,
     status: str | None = None,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_training_records(db, page, size, employee_id, status)
@@ -349,7 +349,7 @@ async def api_list_training_records(
 @router.get("/training/{record_id}", response_model=TrainingRecordOut)
 async def api_get_training_record(
     record_id: UUID,
-    current_user: User = Depends(require_perm("employee_automation", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_training_record(db, record_id)

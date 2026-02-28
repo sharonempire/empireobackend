@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.payments import service
 from app.modules.payments.schemas import (
     CreateOrderRequest,
@@ -47,7 +47,7 @@ async def api_list_payments(
     status: str | None = None,
     user_id: str | None = None,
     platform: str | None = None,
-    current_user: User = Depends(require_perm("payments", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_payments(db, page, size, status, user_id, platform)
@@ -56,7 +56,7 @@ async def api_list_payments(
 
 @router.get("/stats")
 async def api_payment_stats(
-    current_user: User = Depends(require_perm("payments", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Payment statistics: total revenue, counts by status/platform."""
@@ -66,7 +66,7 @@ async def api_payment_stats(
 @router.get("/{payment_id}", response_model=PaymentDetailOut)
 async def api_get_payment(
     payment_id: int,
-    current_user: User = Depends(require_perm("payments", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_payment(db, payment_id)

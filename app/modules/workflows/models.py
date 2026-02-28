@@ -28,6 +28,6 @@ class WorkflowInstance(Base):
     entity_id = Column(UUID(as_uuid=True), nullable=False)
     current_stage = Column(String(50), nullable=True)
     stage_entered_at = Column(DateTime(timezone=True), nullable=True)
-    history = Column(JSONB, default=list)
+    history = Column(JSONB, server_default="'[]'::jsonb")
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

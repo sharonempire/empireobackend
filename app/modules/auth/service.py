@@ -1,8 +1,10 @@
 """Auth service with refresh token rotation and reuse detection."""
 
+import logging
 import uuid as _uuid
 from datetime import datetime, timedelta, timezone
 
+import httpx
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,18 +21,67 @@ from app.core.security import (
 from app.modules.auth.models import RefreshToken
 from app.modules.users.models import User
 
+logger = logging.getLogger(__name__)
+
+
+async def _verify_via_supabase_auth(email: str, password: str) -> bool:
+    """Verify credentials against Supabase Auth (GoTrue) API.
+
+    Returns True if Supabase Auth accepts the email+password combo.
+    Returns False if credentials are invalid or Supabase Auth is unavailable.
+    """
+    if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
+        return False
+
+    url = f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=password"
+    headers = {
+        "apikey": settings.SUPABASE_ANON_KEY,
+        "Content-Type": "application/json",
+    }
+    payload = {"email": email, "password": password}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 200:
+                return True
+            # 400/401 = invalid credentials — that's fine, not an error
+            return False
+    except Exception as exc:
+        logger.warning("Supabase Auth check failed (network error): %s", exc)
+        return False
+
 
 async def authenticate(db: AsyncSession, email: str, password: str) -> User | None:
-    """Validate email + password. Returns User or None."""
+    """Validate email + password. Tries Supabase Auth first, then local bcrypt.
+
+    Flow:
+    1. Look up user in eb_users by email
+    2. Try verifying password via Supabase Auth API (existing passwords)
+    3. If Supabase Auth succeeds, sync password hash to eb_users for local fallback
+    4. If Supabase Auth unavailable/not configured, fall back to local bcrypt
+    """
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         return None
-    if not verify_password(password, user.hashed_password):
-        return None
-    user.last_login_at = datetime.now(timezone.utc)
-    await db.flush()
-    return user
+
+    # Strategy 1: Verify via Supabase Auth (where existing passwords live)
+    supabase_ok = await _verify_via_supabase_auth(email, password)
+    if supabase_ok:
+        # Sync password hash to eb_users so local bcrypt works in future
+        user.hashed_password = hash_password(password)
+        user.last_login_at = datetime.now(timezone.utc)
+        await db.flush()
+        return user
+
+    # Strategy 2: Fall back to local bcrypt (works after password sync or manual set)
+    if user.hashed_password and verify_password(password, user.hashed_password):
+        user.last_login_at = datetime.now(timezone.utc)
+        await db.flush()
+        return user
+
+    return None
 
 
 async def issue_tokens(

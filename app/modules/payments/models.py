@@ -50,6 +50,6 @@ class Payment(Base):
     error_message = Column(Text, nullable=True)
     refund_id = Column(Text, nullable=True)
     refund_amount = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default="now()")
     updated_at = Column(DateTime(timezone=True), nullable=True)
     platform = Column(Text, nullable=True)

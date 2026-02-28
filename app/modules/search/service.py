@@ -164,7 +164,7 @@ async def create_domain_keyword(db: AsyncSession, data: DomainKeywordMapCreate) 
 
 
 async def list_synonyms(db: AsyncSession) -> list[SearchSynonym]:
-    result = await db.execute(select(SearchSynonym).order_by(SearchSynonym.term))
+    result = await db.execute(select(SearchSynonym).order_by(SearchSynonym.trigger))
     return result.scalars().all()
 
 

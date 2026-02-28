@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.jobs import service
 from app.modules.jobs.schemas import AppliedJobOut, JobOut, JobProfileOut
 from app.modules.users.models import User
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 async def api_list_job_profiles(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    current_user: User = Depends(require_perm("jobs", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_job_profiles(db, page, size)
@@ -27,7 +27,7 @@ async def api_list_jobs(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
     status: str | None = None,
-    current_user: User = Depends(require_perm("jobs", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_jobs(db, page, size, status)
@@ -37,7 +37,7 @@ async def api_list_jobs(
 @router.get("/{job_id}", response_model=JobOut)
 async def api_get_job(
     job_id: int,
-    current_user: User = Depends(require_perm("jobs", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_job(db, job_id)
@@ -48,7 +48,7 @@ async def api_list_applied_jobs(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
     user_id: str | None = None,
-    current_user: User = Depends(require_perm("jobs", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_applied_jobs(db, page, size, user_id)

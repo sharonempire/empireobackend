@@ -54,7 +54,7 @@ class Lead(Base):
 class LeadInfo(Base):
     __tablename__ = "lead_info"
 
-    id = Column(BigInteger, ForeignKey("leadslist.id"), primary_key=True, autoincrement=True)
+    id = Column(BigInteger, ForeignKey("leadslist.id"), primary_key=True)
     created_at = Column(DateTime(timezone=True))
     basic_info = Column(JSONB, nullable=True)
     education = Column(JSONB, nullable=True)

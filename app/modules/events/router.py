@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.events import service
 from app.modules.events.schemas import EventOut
 from app.modules.users.models import User
@@ -20,7 +20,7 @@ async def api_list_events(
     entity_type: str | None = None,
     entity_id: UUID | None = None,
     event_type: str | None = None,
-    current_user: User = Depends(require_perm("events", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_events(db, page, size, entity_type, entity_id, event_type)

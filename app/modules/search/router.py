@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import log_event
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.search import service
 from app.modules.search.schemas import (
     DomainKeywordMapCreate,
@@ -27,7 +27,7 @@ async def api_unified_search(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
     use_ai: bool = Query(False, description="Use AI to parse natural language queries"),
-    current_user: User = Depends(require_perm("search", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Hybrid search across all entities.
@@ -46,7 +46,7 @@ async def api_typeahead(
     q: str = Query(..., min_length=2, description="Autocomplete query"),
     entity_type: str = Query("all"),
     limit: int = Query(10, ge=1, le=50),
-    current_user: User = Depends(require_perm("search", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Fast autocomplete/typeahead across entities.
@@ -61,7 +61,7 @@ async def api_typeahead(
 
 @router.get("/config/domains", response_model=list[DomainKeywordMapOut])
 async def api_list_domain_keywords(
-    current_user: User = Depends(require_perm("search", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.list_domain_keywords(db)
@@ -83,7 +83,7 @@ async def api_create_domain_keyword(
 
 @router.get("/config/synonyms", response_model=list[SearchSynonymOut])
 async def api_list_synonyms(
-    current_user: User = Depends(require_perm("search", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.list_synonyms(db)
@@ -105,7 +105,7 @@ async def api_create_synonym(
 
 @router.get("/config/stopwords", response_model=list[StopwordOut])
 async def api_list_stopwords(
-    current_user: User = Depends(require_perm("search", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.list_stopwords(db)

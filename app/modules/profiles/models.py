@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import BigInteger, Column, DateTime, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 
@@ -7,7 +9,7 @@ from app.database import Base
 class Profile(Base):
     __tablename__ = "profiles"
 
-    id = Column(UUID(as_uuid=True), primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     diplay_name = Column(Text, nullable=True)  # Note: typo in DB (diplay not display)
     profilepicture = Column(Text, nullable=True)
     user_type = Column(Text, nullable=True)

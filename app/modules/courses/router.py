@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.events import log_event
 from app.core.pagination import PaginatedResponse, paginate_metadata
 from app.database import get_db
-from app.dependencies import require_perm
+from app.dependencies import get_current_user, require_perm
 from app.modules.courses import service
 from app.modules.courses.schemas import (
     AppliedCourseOut,
@@ -36,7 +36,7 @@ async def api_list_courses(
     intake: str | None = None,
     currency: str | None = None,
     field_of_study: str | None = None,
-    current_user: User = Depends(require_perm("courses", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_courses(
@@ -62,7 +62,7 @@ async def api_search_courses(
     q: str = Query(..., min_length=1),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    current_user: User = Depends(require_perm("courses", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Hybrid search: full-text (TSVECTOR) + trigram fuzzy + ILIKE, ranked by relevance."""
@@ -75,7 +75,7 @@ async def api_eligible_courses(
     lead_id: int,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    current_user: User = Depends(require_perm("courses", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Find courses a student is eligible for based on their profile."""
@@ -111,7 +111,7 @@ async def api_import_courses(
 async def api_list_pending_courses(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    current_user: User = Depends(require_perm("courses", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await service.list_pending_courses(db, page, size)
@@ -121,7 +121,7 @@ async def api_list_pending_courses(
 @router.get("/{course_id}", response_model=CourseOut)
 async def api_get_course(
     course_id: int,
-    current_user: User = Depends(require_perm("courses", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_course(db, course_id)
@@ -202,7 +202,7 @@ async def api_list_approval_requests(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
     status: str | None = None,
-    current_user: User = Depends(require_perm("courses", "read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """List course approval requests."""
